@@ -58,19 +58,10 @@ export default function IndicatorPanel({
     const canvas = canvasRef.current;
     if (!canvas || !data || !viewportSync || !visible) return;
 
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (!rect || rect.width === 0 || rect.height === 0) return;
-
     const dpr = window.devicePixelRatio || 1;
-    const w = Math.floor(rect.width);
-    const h = Math.floor(rect.height);
-
-    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      canvas.style.width = `${w}px`;
-      canvas.style.height = `${h}px`;
-    }
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    if (w === 0 || h === 0) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -216,9 +207,24 @@ export default function IndicatorPanel({
   }, [draw]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(() => draw());
-    ro.observe(containerRef.current);
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(width) * dpr;
+        canvas.height = Math.floor(height) * dpr;
+        canvas.style.width = `${Math.floor(width)}px`;
+        canvas.style.height = `${Math.floor(height)}px`;
+      }
+      draw();
+    });
+    ro.observe(container);
     return () => ro.disconnect();
   }, [draw]);
 
@@ -349,13 +355,13 @@ export default function IndicatorPanel({
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className="flex-1 min-h-0 overflow-hidden"
+        className="flex-1 min-h-0 relative overflow-hidden"
         onPointerMove={handlePointerMove}
         onPointerLeave={() => onPointerIndex(null)}
       >
         <canvas
           ref={canvasRef}
-          className="block w-full h-full"
+          className="absolute top-0 left-0 block"
           style={{ opacity: visible ? 1 : 0.3 }}
         />
       </div>
