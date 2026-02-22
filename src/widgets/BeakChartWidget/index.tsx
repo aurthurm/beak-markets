@@ -11,11 +11,12 @@ import type {
 import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { DrawingToolbar, type NavigationTool } from './DrawingToolbar';
+import IndicatorPanel from './IndicatorPanel';
 
 type Props = { ticker: string };
 type ChartType = 'candlestick' | 'bar' | 'line';
 type Timeframe = '15m' | '1h' | '4h' | 'D' | 'W' | '2W' | '1M';
-type IndicatorType = 'sma' | 'ema' | 'ao';
+type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd';
 type IndicatorSource = 'close' | 'open' | 'high' | 'low' | 'median';
 type IndicatorStyle = 'solid' | 'dashed' | 'dotted';
 type IndicatorsTab = 'indicators' | 'strategies' | 'patterns';
@@ -33,6 +34,18 @@ type IndicatorConfig = {
   offset: number;
   lineWidth: number;
   style: IndicatorStyle;
+  overbought?: number;
+  oversold?: number;
+  fastPeriod?: number;
+  slowPeriod?: number;
+  signalPeriod?: number;
+};
+
+type BottomIndicatorData = {
+  lines: Array<{ label: string; color: string; values: (number | null)[] }>;
+  histogram?: { values: (number | null)[]; upColor: string; downColor: string };
+  referenceLines?: Array<{ value: number; color: string; dashed: boolean }>;
+  yRange?: { min: number; max: number };
 };
 
 const TIMEFRAMES: Timeframe[] = ['15m', '1h', '4h', 'D', 'W'];
@@ -55,8 +68,8 @@ const INDICATOR_CATALOG: {
   { key: 'sma', label: 'Simple Moving Average (SMA)', type: 'sma', color: '#22d3ee', placement: 'overlay', enabled: true },
   { key: 'ema', label: 'Exponential Moving Average (EMA)', type: 'ema', color: '#f59e0b', placement: 'overlay', enabled: true },
   { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
-  { key: 'rsi', label: 'Relative Strength Index (RSI)', enabled: false },
-  { key: 'macd', label: 'Moving Average Convergence Divergence (MACD)', enabled: false },
+  { key: 'rsi', label: 'Relative Strength Index (RSI)', type: 'rsi', color: '#a855f7', placement: 'bottom', enabled: true },
+  { key: 'macd', label: 'MACD', type: 'macd', color: '#06b6d4', placement: 'bottom', enabled: true },
   { key: 'bb', label: 'Bollinger Bands', enabled: false },
 ];
 
@@ -120,6 +133,20 @@ export default function BeakChartWidget({ ticker }: Props) {
     }
     return m;
   }, [visiblePrices, indicators]);
+
+  const bottomPanelDataMap = useMemo(() => {
+    const m = new Map<string, BottomIndicatorData>();
+    for (const indicator of indicators) {
+      if (indicator.placement !== 'bottom') continue;
+      m.set(indicator.id, computeBottomPanelData(visiblePrices, indicator));
+    }
+    return m;
+  }, [visiblePrices, indicators]);
+
+  const bottomIndicators = useMemo(
+    () => indicators.filter((i) => i.placement === 'bottom'),
+    [indicators],
+  );
 
   const pointIndex = Math.min(
     Math.max(hoverIndex ?? visiblePrices.length - 1, 0),
@@ -342,19 +369,26 @@ export default function BeakChartWidget({ ticker }: Props) {
     placement: IndicatorPlacement;
   }) => {
     const id = `${entry.type}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const defaults: Record<string, Partial<IndicatorConfig>> = {
+      ao: { period: 5, source: 'median' },
+      rsi: { period: 14, overbought: 70, oversold: 30 },
+      macd: { period: 12, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
+    };
+    const d = defaults[entry.type] ?? {};
     setIndicators((prev) => [
       ...prev,
       {
         id,
         type: entry.type,
         placement: entry.placement,
-        period: entry.type === 'ao' ? 5 : 9,
+        period: d.period ?? 9,
         color: entry.color,
         visible: true,
-        source: entry.type === 'ao' ? 'median' : 'close',
+        source: d.source ?? 'close',
         offset: 0,
         lineWidth: 1.8,
         style: 'solid',
+        ...d,
       },
     ]);
   }, []);
@@ -511,7 +545,7 @@ export default function BeakChartWidget({ ticker }: Props) {
         {/* 1. Chart panel (top) - takes remaining space */}
         <div
           ref={chartPaneHostRef}
-          className="relative nodrag flex-1 min-h-0 overflow-hidden"
+          className={`relative nodrag flex-1 overflow-hidden ${bottomIndicators.length > 0 ? 'min-h-[40%]' : 'min-h-0'}`}
           onPointerMove={handleChartPointerMove}
           onPointerLeave={() => setHoverIndex(null)}
         >
@@ -539,6 +573,7 @@ export default function BeakChartWidget({ ticker }: Props) {
                   )}
                   {indicators.map((indicator) => {
                     const rowValue = indicatorDataMap.get(indicator.id)?.[pointIndex]?.value ?? null;
+                    const valDecimals = indicator.placement === 'bottom' ? 2 : decimals;
                     return (
                       <div key={indicator.id} className="group rounded border border-slate-700/70 bg-slate-800/65 px-1.5 py-1 mb-1 last:mb-0">
                         <div className="flex items-center gap-1">
@@ -546,14 +581,17 @@ export default function BeakChartWidget({ ticker }: Props) {
                           <span className="text-[11px] text-slate-200 flex-1">
                             {indicatorLabel(indicator)}
                           </span>
+                          {indicator.placement === 'bottom' && (
+                            <span className="text-[9px] text-slate-500 bg-slate-700/50 px-1 rounded">panel</span>
+                          )}
                           <span className="text-[11px] font-mono text-slate-300">
-                            {rowValue == null ? '--' : rowValue.toFixed(decimals)}
+                            {rowValue == null ? '--' : rowValue.toFixed(valDecimals)}
                           </span>
                         </div>
                         <div className="mt-0.5 text-[10px] text-slate-400 flex items-center gap-2">
                           <span>{hoverIndex == null ? 'Last' : 'Crosshair'}</span>
-                          <span>src:{indicator.source}</span>
-                          <span>off:{indicator.offset}</span>
+                          {indicator.placement !== 'bottom' && <span>src:{indicator.source}</span>}
+                          {indicator.placement !== 'bottom' && <span>off:{indicator.offset}</span>}
                         </div>
                         <div className="hidden group-hover:flex mt-1 items-center gap-1">
                           <TinyActionButton
@@ -584,6 +622,24 @@ export default function BeakChartWidget({ ticker }: Props) {
             onDeleteSelected={handleDeleteSelected}
           />
         </div>
+
+        {/* Bottom indicator panels */}
+        {bottomIndicators.map((indicator) => (
+          <IndicatorPanel
+            key={indicator.id}
+            indicatorId={indicator.id}
+            label={indicatorLabel(indicator)}
+            visible={indicator.visible}
+            data={bottomPanelDataMap.get(indicator.id)}
+            viewportSync={viewportSync}
+            theme={isDark ? darkTheme : lightTheme}
+            hoverIndex={hoverIndex}
+            onRemove={() => removeIndicator(indicator.id)}
+            onSettings={() => setSettingsIndicatorId(indicator.id)}
+            onToggleVisibility={() => updateIndicator(indicator.id, { visible: !indicator.visible })}
+            onPointerIndex={setHoverIndex}
+          />
+        ))}
 
         {/* Timescale / X-axis (bottom) */}
         <div
@@ -665,7 +721,11 @@ export default function BeakChartWidget({ ticker }: Props) {
                         <div className="flex-1 min-w-0">
                           <div className={`text-xs truncate ${entry.enabled ? 'text-slate-200' : 'text-slate-500'}`}>{entry.label}</div>
                           <div className="text-[10px] text-slate-500">
-                            {entry.enabled ? 'Default rolling window: 9' : 'Not available yet'}
+                            {!entry.enabled
+                              ? 'Not available yet'
+                              : entry.placement === 'bottom'
+                                ? 'Bottom panel indicator'
+                                : 'Default rolling window: 9'}
                           </div>
                         </div>
 
@@ -795,6 +855,71 @@ export default function BeakChartWidget({ ticker }: Props) {
                     className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
                   />
                 </label>
+
+                {settingsIndicator.type === 'rsi' && (
+                  <>
+                    <label className="flex flex-col gap-1">
+                      <span>Overbought</span>
+                      <input
+                        type="number"
+                        min={50}
+                        max={100}
+                        value={settingsIndicator.overbought ?? 70}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { overbought: Math.max(50, Math.min(100, Number(e.target.value) || 70)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span>Oversold</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={50}
+                        value={settingsIndicator.oversold ?? 30}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { oversold: Math.max(0, Math.min(50, Number(e.target.value) || 30)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                  </>
+                )}
+
+                {settingsIndicator.type === 'macd' && (
+                  <>
+                    <label className="flex flex-col gap-1">
+                      <span>Fast Period</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={100}
+                        value={settingsIndicator.fastPeriod ?? 12}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { fastPeriod: Math.max(2, Math.min(100, Number(e.target.value) || 12)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span>Slow Period</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={200}
+                        value={settingsIndicator.slowPeriod ?? 26}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { slowPeriod: Math.max(2, Math.min(200, Number(e.target.value) || 26)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span>Signal Period</span>
+                      <input
+                        type="number"
+                        min={2}
+                        max={100}
+                        value={settingsIndicator.signalPeriod ?? 9}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { signalPeriod: Math.max(2, Math.min(100, Number(e.target.value) || 9)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -949,7 +1074,10 @@ function TimescaleRow({
   );
 }
 
-function indicatorLabel(indicator: Pick<IndicatorConfig, 'type' | 'period'>): string {
+function indicatorLabel(indicator: Pick<IndicatorConfig, 'type' | 'period' | 'fastPeriod' | 'slowPeriod' | 'signalPeriod'>): string {
+  if (indicator.type === 'macd') {
+    return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
+  }
   return `${indicator.type.toUpperCase()} ${indicator.period}`;
 }
 
@@ -958,7 +1086,17 @@ function computeIndicatorData(
   indicator: IndicatorConfig,
 ): LineDataPoint[] {
   let base: Array<number | null>;
-  if (indicator.type === 'ao') {
+  if (indicator.type === 'rsi') {
+    base = computeRsiValues(prices, indicator.period);
+  } else if (indicator.type === 'macd') {
+    const { macdLine } = computeMacdValues(
+      prices,
+      indicator.fastPeriod ?? 12,
+      indicator.slowPeriod ?? 26,
+      indicator.signalPeriod ?? 9,
+    );
+    base = macdLine;
+  } else if (indicator.type === 'ao') {
     base = computeAoValues(prices);
   } else {
     const sourceValues = prices.map((p) => getSourcePrice(p, indicator.source));
@@ -1035,6 +1173,127 @@ function computeEmaValues(values: number[], period: number): Array<number | null
     ema = (v - ema!) * alpha + ema!;
     return ema;
   });
+}
+
+function computeRsiValues(
+  prices: { close: number }[],
+  period: number,
+): Array<number | null> {
+  if (prices.length === 0) return [];
+  const result: Array<number | null> = [null];
+  let avgGain = 0;
+  let avgLoss = 0;
+
+  for (let i = 1; i < prices.length; i++) {
+    const diff = prices[i].close - prices[i - 1].close;
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+
+    if (i < period) {
+      avgGain += gain;
+      avgLoss += loss;
+      result.push(null);
+      continue;
+    }
+
+    if (i === period) {
+      avgGain = (avgGain + gain) / period;
+      avgLoss = (avgLoss + loss) / period;
+    } else {
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
+    }
+
+    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+    result.push(100 - 100 / (1 + rs));
+  }
+  return result;
+}
+
+function computeMacdValues(
+  prices: { close: number }[],
+  fastPeriod: number,
+  slowPeriod: number,
+  signalPeriod: number,
+): { macdLine: Array<number | null>; signalLine: Array<number | null>; histogram: Array<number | null> } {
+  const closes = prices.map((p) => p.close);
+  const fastEma = computeEmaValues(closes, fastPeriod);
+  const slowEma = computeEmaValues(closes, slowPeriod);
+
+  const macdLine: Array<number | null> = closes.map((_, i) => {
+    const f = fastEma[i];
+    const s = slowEma[i];
+    if (f == null || s == null) return null;
+    return f - s;
+  });
+
+  const macdNonNull = macdLine.filter((v): v is number => v != null);
+  const signalRaw = computeEmaValues(macdNonNull, signalPeriod);
+
+  const signalLine: Array<number | null> = [];
+  let si = 0;
+  for (const v of macdLine) {
+    if (v == null) {
+      signalLine.push(null);
+    } else {
+      signalLine.push(signalRaw[si] ?? null);
+      si++;
+    }
+  }
+
+  const histogram: Array<number | null> = macdLine.map((m, i) => {
+    const s = signalLine[i];
+    if (m == null || s == null) return null;
+    return m - s;
+  });
+
+  return { macdLine, signalLine, histogram };
+}
+
+function computeBottomPanelData(
+  prices: { timestamp: number; open: number; high: number; low: number; close: number }[],
+  indicator: IndicatorConfig,
+): BottomIndicatorData {
+  if (indicator.type === 'rsi') {
+    const values = computeRsiValues(prices, indicator.period);
+    const ob = indicator.overbought ?? 70;
+    const os = indicator.oversold ?? 30;
+    return {
+      lines: [{ label: `RSI ${indicator.period}`, color: indicator.color, values }],
+      referenceLines: [
+        { value: ob, color: '#ef4444aa', dashed: true },
+        { value: os, color: '#22c55eaa', dashed: true },
+        { value: 50, color: '#94a3b844', dashed: true },
+      ],
+      yRange: { min: 0, max: 100 },
+    };
+  }
+
+  if (indicator.type === 'macd') {
+    const fast = indicator.fastPeriod ?? 12;
+    const slow = indicator.slowPeriod ?? 26;
+    const signal = indicator.signalPeriod ?? 9;
+    const { macdLine, signalLine, histogram } = computeMacdValues(prices, fast, slow, signal);
+    return {
+      lines: [
+        { label: `MACD ${fast}`, color: indicator.color, values: macdLine },
+        { label: `Signal ${signal}`, color: '#f59e0b', values: signalLine },
+      ],
+      histogram: { values: histogram, upColor: '#22c55e88', downColor: '#ef444488' },
+      referenceLines: [{ value: 0, color: '#94a3b844', dashed: true }],
+    };
+  }
+
+  if (indicator.type === 'ao') {
+    const values = computeAoValues(prices);
+    return {
+      lines: [{ label: 'AO', color: indicator.color, values }],
+      histogram: { values, upColor: '#22c55e88', downColor: '#ef444488' },
+      referenceLines: [{ value: 0, color: '#94a3b844', dashed: true }],
+    };
+  }
+
+  return { lines: [] };
 }
 
 function updateData(
