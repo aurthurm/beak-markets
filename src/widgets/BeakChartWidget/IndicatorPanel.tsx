@@ -13,6 +13,7 @@ type ViewportSync = {
   end: number;
   totalBars: number;
   chartWidth: number;
+  barSpacing: number;
 };
 
 type IndicatorPanelProps = {
@@ -69,11 +70,9 @@ export default function IndicatorPanel({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const chartW = w - PRICE_SCALE_WIDTH;
+    const chartW = viewportSync.chartWidth;
     const chartH = h;
-    const { start, end } = viewportSync;
-    const barCount = Math.max(1, end - start + 1);
-    const barSpacing = chartW / barCount;
+    const { start, end, barSpacing } = viewportSync;
 
     const { yMin, yMax } = getYRange(data, start, end);
     const yRange = yMax - yMin || 1;
@@ -252,14 +251,11 @@ export default function IndicatorPanel({
     if (!viewportSync) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const chartW = rect.width - PRICE_SCALE_WIDTH;
-    if (x > chartW || x < 0) {
+    const { start, end, chartWidth, barSpacing } = viewportSync;
+    if (x > chartWidth || x < 0) {
       onPointerIndex(null);
       return;
     }
-    const { start, end } = viewportSync;
-    const barCount = Math.max(1, end - start + 1);
-    const barSpacing = chartW / barCount;
     const idx = Math.floor(x / barSpacing) + start;
     onPointerIndex(Math.max(start, Math.min(end, idx)));
   }, [viewportSync, onPointerIndex]);

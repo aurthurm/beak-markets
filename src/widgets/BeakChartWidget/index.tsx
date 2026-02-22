@@ -109,7 +109,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('select');
   const [navigationTool, setNavigationTool] = useState<NavigationTool>('select');
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
-  const [viewportSync, setViewportSync] = useState<{ start: number; end: number; totalBars: number; chartWidth: number } | null>(null);
+  const [viewportSync, setViewportSync] = useState<{ start: number; end: number; totalBars: number; chartWidth: number; barSpacing: number } | null>(null);
 
   const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
   const visiblePrices = useMemo(() => dataset.prices.slice(0, currentIndex + 1), [dataset, currentIndex]);
@@ -302,13 +302,15 @@ export default function BeakChartWidget({ ticker }: Props) {
             end: range.endIndex,
             totalBars,
             chartWidth: Math.max(0, viewport.chartWidth),
+            barSpacing: viewport.barSpacing,
           };
           setViewportSync((prev) => (
             !prev ||
             prev.start !== next.start ||
             prev.end !== next.end ||
             prev.totalBars !== next.totalBars ||
-            Math.abs(prev.chartWidth - next.chartWidth) > 0.5
+            Math.abs(prev.chartWidth - next.chartWidth) > 0.5 ||
+            Math.abs(prev.barSpacing - next.barSpacing) > 0.01
               ? next
               : prev
           ));
@@ -402,13 +404,20 @@ export default function BeakChartWidget({ ticker }: Props) {
   );
 
   const handleChartPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const chart = chartRef.current;
+    if (!chart) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const usableW = Math.max(1, rect.width - 58);
-    const ratio = Math.max(0, Math.min(1, x / usableW));
-    const idx = Math.round(ratio * Math.max(visiblePrices.length - 1, 0));
+    const viewport = chart.getViewport();
+    const dataManager = chart.getDataManager();
+    const totalBars = dataManager.getTotalBars();
+    if (totalBars === 0 || x < 0 || x >= viewport.chartWidth) {
+      setHoverIndex(null);
+      return;
+    }
+    const idx = Math.max(0, Math.min(totalBars - 1, viewport.xToBarIndex(x, totalBars)));
     setHoverIndex(idx);
-  }, [visiblePrices.length]);
+  }, []);
 
   const settingsIndicator = indicators.find((i) => i.id === settingsIndicatorId) ?? null;
 
@@ -961,7 +970,7 @@ function TimescaleRow({
   onZoomX,
 }: {
   prices: { timestamp: number }[];
-  viewportSync: { start: number; end: number; totalBars: number; chartWidth: number } | null;
+  viewportSync: { start: number; end: number; totalBars: number; chartWidth: number; barSpacing: number } | null;
   chartWidth: number;
   theme: Theme;
   onZoomX: (factor: number, centerX: number) => void;
@@ -970,6 +979,7 @@ function TimescaleRow({
   const start = viewportSync?.start ?? Math.max(0, prices.length - 40);
   const end = viewportSync?.end ?? Math.max(0, prices.length - 1);
   const count = Math.max(1, end - start + 1);
+  const barSpacing = viewportSync?.barSpacing ?? (chartWidth / count);
   const step = Math.max(1, Math.floor(count / 6));
   const width = Math.max(120, Math.floor(chartWidth));
   const effectiveChartWidth = viewportSync?.chartWidth ?? chartWidth;
@@ -1023,7 +1033,8 @@ function TimescaleRow({
         {Array.from({ length: count }).map((_, idx) => {
           if (idx % step !== 0 && idx !== count - 1) return null;
           const barIndex = start + idx;
-          const x = ((idx + 0.5) / count) * width;
+          const x = (idx + 0.5) * barSpacing;
+          if (x < 0 || x > width) return null;
           const ts = prices[barIndex]?.timestamp;
           if (!ts) return null;
           return (
