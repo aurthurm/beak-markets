@@ -404,20 +404,17 @@ export default function BeakChartWidget({ ticker }: Props) {
   );
 
   const handleChartPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const chart = chartRef.current;
-    if (!chart) return;
+    if (!viewportSync) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const viewport = chart.getViewport();
-    const dataManager = chart.getDataManager();
-    const totalBars = dataManager.getTotalBars();
-    if (totalBars === 0 || x < 0 || x >= viewport.chartWidth) {
+    const { start, end, chartWidth, barSpacing } = viewportSync;
+    if (x < 0 || x > chartWidth) {
       setHoverIndex(null);
       return;
     }
-    const idx = Math.max(0, Math.min(totalBars - 1, viewport.xToBarIndex(x, totalBars)));
-    setHoverIndex(idx);
-  }, []);
+    const idx = Math.floor(x / barSpacing) + start;
+    setHoverIndex(Math.max(start, Math.min(end, idx)));
+  }, [viewportSync]);
 
   const settingsIndicator = indicators.find((i) => i.id === settingsIndicatorId) ?? null;
 

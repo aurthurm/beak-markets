@@ -55,6 +55,9 @@ export class Chart {
   private _priceScale: PriceScale;
   private _options: ChartOptions;
   private _resizeObserver: ResizeObserver | null = null;
+  private _resizeRafId: number | null = null;
+  private _intersectionObserver: IntersectionObserver | null = null;
+  private _isVisible = true;
   private _eventRouter: EventRouter;
   private _panHandler: PanHandler;
   private _zoomHandler: ZoomHandler;
@@ -192,17 +195,32 @@ export class Chart {
     // Before draw: update price range for auto-scale
     this._renderer.setOnDraw(() => this._updatePriceRange());
 
-    // Size
+    // Size (throttled to avoid excessive resize during drag/layout)
     if (this._options.autoSize) {
       this._resizeObserver = new ResizeObserver((entries) => {
         if (this._destroyed) return;
         const entry = entries[0];
         if (!entry) return;
         const { width, height } = entry.contentRect;
-        if (width > 0 && height > 0) this.resize(Math.floor(width), Math.floor(height));
+        if (width <= 0 || height <= 0) return;
+        const w = Math.floor(width);
+        const h = Math.floor(height);
+        if (this._resizeRafId !== null) cancelAnimationFrame(this._resizeRafId);
+        this._resizeRafId = requestAnimationFrame(() => {
+          this._resizeRafId = null;
+          if (!this._destroyed) this.resize(w, h);
+        });
       });
       this._resizeObserver.observe(container);
     }
+    this._renderer.setVisibleCheck(() => this._isVisible);
+    this._intersectionObserver = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      this._isVisible = entry.isIntersecting;
+      if (entry.isIntersecting) this._renderer.requestDraw();
+    });
+    this._intersectionObserver.observe(container);
     this._syncSize();
   }
 
@@ -260,6 +278,13 @@ export class Chart {
   setTheme(theme: Theme): void {
     this._options.theme = theme;
     this._renderer.setTheme(theme);
+  }
+
+  setOptions(options: Partial<ChartOptions>): void {
+    this._options = deepMerge(this._options, options) as ChartOptions;
+    if (options.theme !== undefined) this._renderer.setTheme(this._options.theme);
+    if (options.crosshair !== undefined) this._crosshairHandler.setConfig(this._options.crosshair);
+    this._renderer.requestDraw();
   }
 
   getTheme(): Theme {
@@ -359,7 +384,13 @@ export class Chart {
 
   destroy(): void {
     this._destroyed = true;
+    if (this._resizeRafId !== null) {
+      cancelAnimationFrame(this._resizeRafId);
+      this._resizeRafId = null;
+    }
     this._resizeObserver?.disconnect();
+    this._intersectionObserver?.disconnect();
+    this._intersectionObserver = null;
     this._eventRouter.destroy();
     this._renderer.destroy();
     this._canvas.remove();
@@ -371,6 +402,9 @@ export class Chart {
     const rect = this._container.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
       this.resize(rect.width, rect.height);
+    } else {
+      // Container not laid out yet (e.g. React ref before paint); use options so viewport/canvas have valid size for first draw
+      this.resize(this._options.width, this._options.height);
     }
   }
 
@@ -379,9 +413,7 @@ export class Chart {
     if (totalBars === 0) return;
 
     const range = this._viewport.getVisibleRange(totalBars);
-    const mainSeriesIds = this._dataManager
-      .getSeriesByPriceScale('right')
-      .map((s) => s.id);
+    const mainSeriesIds = this._dataManager.getSeriesIdsByPriceScale('right');
 
     if (mainSeriesIds.length > 0) {
       const { min, max } = this._dataManager.getPriceRange(

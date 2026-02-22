@@ -1,4 +1,4 @@
-import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef, memo } from 'react';
 import { Chart } from '../core/Chart.ts';
 import type { ChartOptions, Theme } from '../types.ts';
 
@@ -14,7 +14,7 @@ export type BeakChartProps = {
   onChartReady?: (chart: Chart) => void;
 };
 
-export const BeakChart = forwardRef<BeakChartRef, BeakChartProps>(function BeakChart(
+const BeakChartInner = forwardRef<BeakChartRef, BeakChartProps>(function BeakChart(
   { options, theme, className, style, onChartReady },
   ref,
 ) {
@@ -47,12 +47,13 @@ export const BeakChart = forwardRef<BeakChartRef, BeakChartProps>(function BeakC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Theme updates
+  // Sync options and theme without remounting (shallow: runs when options/theme reference changes)
   useEffect(() => {
-    if (chartRef.current && theme) {
-      chartRef.current.setTheme(theme);
-    }
-  }, [theme]);
+    const chart = chartRef.current;
+    if (!chart) return;
+    if (theme !== undefined) chart.setTheme(theme);
+    if (options !== undefined) chart.setOptions(options);
+  }, [options, theme]);
 
   return (
     <div
@@ -62,3 +63,5 @@ export const BeakChart = forwardRef<BeakChartRef, BeakChartProps>(function BeakC
     />
   );
 });
+
+export const BeakChart = memo(BeakChartInner);

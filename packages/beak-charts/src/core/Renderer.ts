@@ -13,10 +13,14 @@ export class Renderer {
   private _needsDraw = true;
   private _theme: Theme;
   private _onDraw: (() => void) | null = null;
+  private _getIsVisible: (() => boolean) | null = null;
 
   constructor(canvas: HTMLCanvasElement, theme: Theme) {
     this._canvas = canvas;
-    this._ctx = canvas.getContext('2d')!;
+    this._ctx = canvas.getContext('2d', {
+      alpha: false,
+      willReadFrequently: false,
+    })!;
     this._theme = theme;
   }
 
@@ -32,9 +36,14 @@ export class Renderer {
     this._onDraw = cb;
   }
 
+  setVisibleCheck(getIsVisible: () => boolean): void {
+    this._getIsVisible = getIsVisible;
+  }
+
   addLayer(layer: DrawLayer): void {
-    this._layers.push(layer);
-    this._layers.sort((a, b) => a.zIndex - b.zIndex);
+    const insert = this._layers.findIndex((l) => l.zIndex > layer.zIndex);
+    if (insert === -1) this._layers.push(layer);
+    else this._layers.splice(insert, 0, layer);
     this.requestDraw();
   }
 
@@ -57,6 +66,10 @@ export class Renderer {
   private _draw(): void {
     this._rafId = null;
     if (!this._needsDraw) return;
+    if (this._getIsVisible && !this._getIsVisible()) {
+      this._needsDraw = false;
+      return;
+    }
     this._needsDraw = false;
 
     if (this._onDraw) this._onDraw();
@@ -64,18 +77,15 @@ export class Renderer {
     const { width, height } = this._canvas;
     const dpr = window.devicePixelRatio || 1;
     const ctx = this._ctx;
-
-    ctx.save();
-    ctx.scale(dpr, dpr);
     const w = width / dpr;
     const h = height / dpr;
 
-    // Clear
+    ctx.save();
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = this._theme.colors.background;
     ctx.fillRect(0, 0, w, h);
 
-    // Draw layers
     for (const layer of this._layers) {
       ctx.save();
       layer.draw(ctx, w, h, this._theme);
@@ -101,5 +111,6 @@ export class Renderer {
     }
     this._layers = [];
     this._onDraw = null;
+    this._getIsVisible = null;
   }
 }

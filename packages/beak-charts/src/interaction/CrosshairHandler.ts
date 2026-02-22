@@ -31,6 +31,10 @@ export class CrosshairHandler implements InputHandler {
   get visible(): boolean { return this._visible; }
   get measureEnabled(): boolean { return this._measureEnabled; }
 
+  setConfig(config: CrosshairConfig): void {
+    this._config = config;
+  }
+
   setMeasureEnabled(enabled: boolean): void {
     this._measureEnabled = enabled;
     if (!enabled) {
