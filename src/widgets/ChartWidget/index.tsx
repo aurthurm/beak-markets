@@ -1,0 +1,247 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  type SeriesType,
+  ColorType,
+  CrosshairMode,
+  type CandlestickData,
+  type HistogramData,
+  type LineData,
+  type Time,
+  CandlestickSeries,
+  HistogramSeries,
+  LineSeries,
+} from 'lightweight-charts';
+import { marketService } from '../../services/marketService';
+import { useSimulationStore } from '../../store/useSimulationStore';
+import { formatCurrency } from '../../utils/format';
+
+type Props = { ticker: string };
+type Indicator = 'sma20' | 'sma50' | 'ema12' | 'rsi';
+
+export default function ChartWidget({ ticker }: Props) {
+  const currentIndex = useSimulationStore((s) => s.currentIndex);
+  const [activeIndicators, setActiveIndicators] = useState<Set<Indicator>>(new Set(['sma20']));
+
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+
+  const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
+  const visiblePrices = useMemo(() => dataset.prices.slice(0, currentIndex + 1), [dataset, currentIndex]);
+  const closes = useMemo(() => visiblePrices.map((p) => p.close), [visiblePrices]);
+
+  const lastBar = visiblePrices[visiblePrices.length - 1];
+  const prevBar = visiblePrices.length > 1 ? visiblePrices[visiblePrices.length - 2] : lastBar;
+  const change = lastBar ? lastBar.close - prevBar.close : 0;
+  const changePct = prevBar ? (change / prevBar.close) * 100 : 0;
+  const { pipSize, decimals } = marketService.getTickerDisplayInfo(ticker);
+  const changePips = Math.round(change / pipSize);
+
+  // Create chart on mount
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: '#64748b',
+        fontSize: 10,
+      },
+      grid: {
+        vertLines: { color: '#1e293b' },
+        horzLines: { color: '#1e293b' },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: '#475569', width: 1, style: 3, labelBackgroundColor: '#1e293b' },
+        horzLine: { color: '#475569', width: 1, style: 3, labelBackgroundColor: '#1e293b' },
+      },
+      rightPriceScale: {
+        borderColor: '#1e293b',
+        scaleMargins: { top: 0.1, bottom: 0.25 },
+      },
+      timeScale: {
+        borderColor: '#1e293b',
+        timeVisible: false,
+      },
+      handleScroll: { vertTouchDrag: false },
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#ef4444',
+      borderUpColor: '#10b981',
+      borderDownColor: '#ef4444',
+      wickUpColor: '#10b98199',
+      wickDownColor: '#ef444499',
+    });
+
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+    });
+
+    chart.priceScale('volume').applyOptions({
+      scaleMargins: { top: 0.8, bottom: 0 },
+    });
+
+    chartRef.current = chart;
+    candleSeriesRef.current = candleSeries;
+    volumeSeriesRef.current = volumeSeries;
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
+        });
+      }
+    };
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(chartContainerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      indicatorSeriesRef.current.forEach((series) => {
+        try { chart.removeSeries(series); } catch {}
+      });
+      indicatorSeriesRef.current.clear();
+      chart.remove();
+      chartRef.current = null;
+      candleSeriesRef.current = null;
+      volumeSeriesRef.current = null;
+    };
+  }, []);
+
+  // Update candle + volume data
+  useEffect(() => {
+    if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
+
+    const candleData: CandlestickData[] = visiblePrices.map((bar) => ({
+      time: (bar.timestamp / 1000) as Time,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+    }));
+
+    const volumeData: HistogramData[] = visiblePrices.map((bar) => ({
+      time: (bar.timestamp / 1000) as Time,
+      value: bar.volume,
+      color: bar.close >= bar.open ? '#10b98130' : '#ef444430',
+    }));
+
+    candleSeriesRef.current.setData(candleData);
+    volumeSeriesRef.current.setData(volumeData);
+  }, [visiblePrices]);
+
+  // Update indicator overlays
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const indicatorConfigs: Record<Indicator, { color: string; calc: () => (number | null)[] }> = {
+      sma20: { color: '#f59e0b', calc: () => marketService.calculateSMA(closes, 20) },
+      sma50: { color: '#8b5cf6', calc: () => marketService.calculateSMA(closes, 50) },
+      ema12: { color: '#06b6d4', calc: () => marketService.calculateEMA(closes, 12) },
+      rsi: { color: '#a855f7', calc: () => marketService.calculateRSI(closes, 14) },
+    };
+
+    // Remove indicators that are no longer active
+    indicatorSeriesRef.current.forEach((series, key) => {
+      if (!activeIndicators.has(key as Indicator)) {
+        try { chart.removeSeries(series); } catch {}
+        indicatorSeriesRef.current.delete(key);
+      }
+    });
+
+    // Add/update active indicators
+    activeIndicators.forEach((ind) => {
+      const config = indicatorConfigs[ind];
+      const values = config.calc();
+
+      let series = indicatorSeriesRef.current.get(ind);
+      if (!series) {
+        if (ind === 'rsi') {
+          series = chart.addSeries(LineSeries, {
+            color: config.color,
+            lineWidth: 1,
+            priceScaleId: 'rsi',
+            crosshairMarkerVisible: false,
+          });
+          chart.priceScale('rsi').applyOptions({
+            scaleMargins: { top: 0.85, bottom: 0 },
+          });
+        } else {
+          series = chart.addSeries(LineSeries, {
+            color: config.color,
+            lineWidth: 1.5 as any,
+            crosshairMarkerVisible: false,
+          });
+        }
+        indicatorSeriesRef.current.set(ind, series);
+      }
+
+      const lineData: LineData[] = [];
+      visiblePrices.forEach((bar, i) => {
+        if (values[i] !== null && values[i] !== undefined) {
+          lineData.push({
+            time: (bar.timestamp / 1000) as Time,
+            value: values[i]!,
+          });
+        }
+      });
+
+      series.setData(lineData);
+    });
+  }, [visiblePrices, closes, activeIndicators]);
+
+  const toggleIndicator = (ind: Indicator) => {
+    setActiveIndicators((prev) => {
+      const next = new Set(prev);
+      if (next.has(ind)) next.delete(ind);
+      else next.add(ind);
+      return next;
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-full gap-2">
+      {/* Price header */}
+      <div className="flex items-baseline gap-3">
+        <span className="text-lg font-bold text-white font-mono">
+          {lastBar ? lastBar.close.toFixed(decimals) : '--'}
+        </span>
+        <span className={`text-sm font-mono ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {changePips >= 0 ? '+' : ''}{changePips} pips ({changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%)
+        </span>
+      </div>
+
+      {/* Indicator toggles */}
+      <div className="nodrag flex gap-1.5 flex-wrap">
+        {(['sma20', 'sma50', 'ema12', 'rsi'] as Indicator[]).map((ind) => (
+          <button
+            key={ind}
+            onClick={() => toggleIndicator(ind)}
+            className={`px-2 py-0.5 text-[10px] font-mono rounded border ${
+              activeIndicators.has(ind)
+                ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10'
+                : 'border-gray-700 text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {ind.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div ref={chartContainerRef} className="nodrag flex-1 min-h-0" />
+    </div>
+  );
+}
