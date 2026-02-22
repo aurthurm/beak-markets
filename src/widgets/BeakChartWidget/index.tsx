@@ -65,13 +65,13 @@ const INDICATOR_CATALOG: {
   placement?: IndicatorPlacement;
   enabled: boolean;
 }[] = [
-  { key: 'sma', label: 'Simple Moving Average (SMA)', type: 'sma', color: '#22d3ee', placement: 'overlay', enabled: true },
-  { key: 'ema', label: 'Exponential Moving Average (EMA)', type: 'ema', color: '#f59e0b', placement: 'overlay', enabled: true },
-  { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
-  { key: 'rsi', label: 'Relative Strength Index (RSI)', type: 'rsi', color: '#a855f7', placement: 'bottom', enabled: true },
-  { key: 'macd', label: 'MACD', type: 'macd', color: '#06b6d4', placement: 'bottom', enabled: true },
-  { key: 'bb', label: 'Bollinger Bands', enabled: false },
-];
+    { key: 'sma', label: 'Simple Moving Average (SMA)', type: 'sma', color: '#22d3ee', placement: 'overlay', enabled: true },
+    { key: 'ema', label: 'Exponential Moving Average (EMA)', type: 'ema', color: '#f59e0b', placement: 'overlay', enabled: true },
+    { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
+    { key: 'rsi', label: 'Relative Strength Index (RSI)', type: 'rsi', color: '#a855f7', placement: 'bottom', enabled: true },
+    { key: 'macd', label: 'MACD', type: 'macd', color: '#06b6d4', placement: 'bottom', enabled: true },
+    { key: 'bb', label: 'Bollinger Bands', enabled: false },
+  ];
 
 const STRATEGY_CATALOG = ['Mean Reversion', 'Breakout', 'Trend Follow'];
 const PATTERN_CATALOG = ['Double Top', 'Head & Shoulders', 'Triangle'];
@@ -104,6 +104,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [settingsIndicatorId, setSettingsIndicatorId] = useState<string | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
 
   const [isDark, setIsDark] = useState(true);
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('select');
@@ -163,6 +164,10 @@ export default function BeakChartWidget({ ticker }: Props) {
     });
     const indicatorSeriesMap = indicatorSeriesRefs.current;
 
+    // Subscribe to the chart's own crosshair X (canvas offsetX coordinate) so
+    // hoverX is always in the exact same coordinate system as what the chart draws.
+    // This eliminates the clientX-vs-offsetX mismatch between the React wrapper and the canvas.
+    chart.onCrosshairMove((x) => setHoverX(x));
     chart.onDrawingChange((event) => {
       if (event.type === 'selected') setSelectedDrawingId(event.drawingId);
       if (event.type === 'deleted') setSelectedDrawingId(null);
@@ -171,6 +176,7 @@ export default function BeakChartWidget({ ticker }: Props) {
     chartRef.current = chart;
 
     return () => {
+      chart.onCrosshairMove(null);
       chart.onDrawingChange(null);
       chart.destroy();
       chartRef.current = null;
@@ -230,6 +236,16 @@ export default function BeakChartWidget({ ticker }: Props) {
   useEffect(() => {
     chartRef.current?.setTheme(isDark ? darkTheme : lightTheme);
   }, [isDark]);
+
+  // When hovering an indicator panel, push its pointer X back to the main chart
+  // so the main chart crosshair mirrors the indicator panel crosshair exactly.
+  useEffect(() => {
+    // Only drive external X when the mouse is NOT on the main chart canvas
+    // (when it IS, the chart drives hoverX via onCrosshairMove callback above)
+    if (hoverX !== null) {
+      chartRef.current?.setCrosshairX(hoverX);
+    }
+  }, [hoverX]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -306,11 +322,11 @@ export default function BeakChartWidget({ ticker }: Props) {
           };
           setViewportSync((prev) => (
             !prev ||
-            prev.start !== next.start ||
-            prev.end !== next.end ||
-            prev.totalBars !== next.totalBars ||
-            Math.abs(prev.chartWidth - next.chartWidth) > 0.5 ||
-            Math.abs(prev.barSpacing - next.barSpacing) > 0.01
+              prev.start !== next.start ||
+              prev.end !== next.end ||
+              prev.totalBars !== next.totalBars ||
+              Math.abs(prev.chartWidth - next.chartWidth) > 0.5 ||
+              Math.abs(prev.barSpacing - next.barSpacing) > 0.01
               ? next
               : prev
           ));
@@ -412,8 +428,10 @@ export default function BeakChartWidget({ ticker }: Props) {
       setHoverIndex(null);
       return;
     }
-    const idx = Math.floor(x / barSpacing) + start;
+    // Math.round consistent with Viewport.xToBarIndex (for value lookup only)
+    const idx = Math.round(start + (x - barSpacing / 2) / barSpacing);
     setHoverIndex(Math.max(start, Math.min(end, idx)));
+    // hoverX is set by chart.onCrosshairMove callback (canvas offsetX), not here
   }, [viewportSync]);
 
   const settingsIndicator = indicators.find((i) => i.id === settingsIndicatorId) ?? null;
@@ -528,7 +546,7 @@ export default function BeakChartWidget({ ticker }: Props) {
           ref={chartPaneHostRef}
           className={`relative nodrag flex-1 overflow-hidden ${bottomIndicators.length > 0 ? 'min-h-[40%]' : 'min-h-0'}`}
           onPointerMove={handleChartPointerMove}
-          onPointerLeave={() => setHoverIndex(null)}
+          onPointerLeave={() => { setHoverIndex(null); }}
         >
           <div ref={containerRef} className="absolute inset-0 w-full h-full" />
           <div className="absolute inset-0 z-[1] pointer-events-none flex items-center justify-center">
@@ -615,10 +633,12 @@ export default function BeakChartWidget({ ticker }: Props) {
             viewportSync={viewportSync}
             theme={isDark ? darkTheme : lightTheme}
             hoverIndex={hoverIndex}
+            hoverX={hoverX}
             onRemove={() => removeIndicator(indicator.id)}
             onSettings={() => setSettingsIndicatorId(indicator.id)}
             onToggleVisibility={() => updateIndicator(indicator.id, { visible: !indicator.visible })}
             onPointerIndex={setHoverIndex}
+            onPointerX={setHoverX}
           />
         ))}
 

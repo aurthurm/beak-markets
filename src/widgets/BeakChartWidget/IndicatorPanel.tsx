@@ -24,10 +24,12 @@ type IndicatorPanelProps = {
   viewportSync: ViewportSync | null;
   theme: Theme;
   hoverIndex: number | null;
+  hoverX: number | null;
   onRemove: () => void;
   onSettings: () => void;
   onToggleVisibility: () => void;
   onPointerIndex: (index: number | null) => void;
+  onPointerX: (x: number | null) => void;
 };
 
 const DEFAULT_HEIGHT = 120;
@@ -43,10 +45,12 @@ export default function IndicatorPanel({
   viewportSync,
   theme,
   hoverIndex,
+  hoverX,
   onRemove,
   onSettings,
   onToggleVisibility,
   onPointerIndex,
+  onPointerX,
 }: IndicatorPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -170,15 +174,15 @@ export default function IndicatorPanel({
       ctx.stroke();
     }
 
-    // Crosshair
-    if (hoverIndex != null && hoverIndex >= start && hoverIndex <= end) {
-      const cx = barIndexToX(hoverIndex);
+    // Crosshair — use raw pixel X (passed from parent) for pixel-perfect alignment
+    // with the main chart crosshair line
+    if (hoverX != null && hoverX >= 0 && hoverX <= chartW) {
       ctx.strokeStyle = theme.colors.crosshair ?? theme.colors.text;
       ctx.lineWidth = 0.5;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
-      ctx.moveTo(cx, 0);
-      ctx.lineTo(cx, chartH);
+      ctx.moveTo(hoverX, 0);
+      ctx.lineTo(hoverX, chartH);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -199,7 +203,7 @@ export default function IndicatorPanel({
 
     // Price scale labels
     drawPriceScaleLabels(ctx, chartW, chartH, effectiveMin, effectiveMax, priceToY, theme);
-  }, [data, viewportSync, theme, hoverIndex, visible]);
+  }, [data, viewportSync, theme, hoverIndex, hoverX, visible]);
 
   useEffect(() => {
     draw();
@@ -254,11 +258,16 @@ export default function IndicatorPanel({
     const { start, end, chartWidth, barSpacing } = viewportSync;
     if (x > chartWidth || x < 0) {
       onPointerIndex(null);
+      onPointerX(null);
       return;
     }
-    const idx = Math.floor(x / barSpacing) + start;
-    onPointerIndex(Math.max(start, Math.min(end, idx)));
-  }, [viewportSync, onPointerIndex]);
+    // Use Math.round consistent with Viewport.xToBarIndex
+    const idx = Math.max(start, Math.min(end, Math.round(start + (x - barSpacing / 2) / barSpacing)));
+    // Snap to bar centre so the crosshair aligns with the main chart crosshair
+    const barCenterX = (idx - start + 0.5) * barSpacing;
+    onPointerIndex(idx);
+    onPointerX(barCenterX);
+  }, [viewportSync, onPointerIndex, onPointerX]);
 
   const currentValues = data?.lines.map((line) => {
     const idx = hoverIndex ?? (data.lines[0]?.values.length ?? 1) - 1;
@@ -353,7 +362,7 @@ export default function IndicatorPanel({
         ref={containerRef}
         className="flex-1 min-h-0 relative overflow-hidden"
         onPointerMove={handlePointerMove}
-        onPointerLeave={() => onPointerIndex(null)}
+        onPointerLeave={() => { onPointerIndex(null); onPointerX(null); }}
       >
         <canvas
           ref={canvasRef}

@@ -13,6 +13,7 @@ export class CrosshairHandler implements InputHandler {
   priority = 5;
   private _x: number | null = null;
   private _y: number | null = null;
+  private _externalX: number | null = null;
   private _visible = false;
   private _measureEnabled = false;
   private _measuring = false;
@@ -24,15 +25,30 @@ export class CrosshairHandler implements InputHandler {
     private _dataManager: DataManager,
     private _config: CrosshairConfig,
     private _requestDraw: () => void,
-  ) {}
+    private _onCrosshairMove?: (x: number | null) => void,
+  ) { }
 
   get crosshairX(): number | null { return this._x; }
   get crosshairY(): number | null { return this._y; }
   get visible(): boolean { return this._visible; }
   get measureEnabled(): boolean { return this._measureEnabled; }
 
+  setOnCrosshairMove(cb: ((x: number | null) => void) | null): void {
+    this._onCrosshairMove = cb ?? undefined;
+  }
+
   setConfig(config: CrosshairConfig): void {
     this._config = config;
+  }
+
+  /**
+   * Set an externally-driven crosshair X pixel (bar-center-snapped).
+   * When set, this overrides the raw pointer X for the vertical line.
+   * Pass null to clear the external override.
+   */
+  setExternalX(x: number | null): void {
+    this._externalX = x;
+    this._requestDraw();
   }
 
   setMeasureEnabled(enabled: boolean): void {
@@ -65,12 +81,25 @@ export class CrosshairHandler implements InputHandler {
       case 'pointermove': {
         const inChart = event.x < this._viewport.chartWidth && event.y < this._viewport.chartHeight;
         if (inChart) {
-          this._x = event.x;
+          // Snap x to bar centre (unless measuring, where raw precision matters).
+          if (!this._measuring) {
+            const totalBars = this._dataManager.getTotalBars();
+            if (totalBars > 0) {
+              const barIdx = Math.max(0, Math.min(totalBars - 1, this._viewport.xToBarIndex(event.x, totalBars)));
+              this._x = this._viewport.barIndexToX(barIdx, totalBars);
+            } else {
+              this._x = event.x;
+            }
+          } else {
+            this._x = event.x;
+          }
           this._y = event.y;
           this._visible = true;
+          this._onCrosshairMove?.(this._x);
           this._requestDraw();
         } else if (this._visible) {
           this._visible = false;
+          this._onCrosshairMove?.(null);
           this._requestDraw();
         }
         return this._measureEnabled ? this._measuring : false;
@@ -86,6 +115,7 @@ export class CrosshairHandler implements InputHandler {
         if (this._visible) {
           this._visible = false;
           this._measuring = false;
+          this._onCrosshairMove?.(null);
           this._requestDraw();
         }
         return false;
@@ -100,32 +130,46 @@ export class CrosshairHandler implements InputHandler {
     dataManager: DataManager,
     theme: Theme,
   ): void {
-    if (!this._visible || this._x === null || this._y === null) return;
+    // Allow external-driven crosshair (from hovering indicator panels)
+    const hasExternal = this._externalX !== null;
+    const hasLocal = this._visible && this._x !== null && this._y !== null;
+
+    if (!hasLocal && !hasExternal) return;
 
     const chartW = viewport.chartWidth;
     const chartH = viewport.chartHeight;
+
+    // When pointer is on this chart: follow mouse exactly (no snapping gap).
+    // When driven externally (indicator panel hovered): use the external raw pixel X.
+    const drawX = hasLocal ? this._x! : (this._externalX ?? this._x!);
 
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = theme.colors.crosshair;
     ctx.lineWidth = 1;
 
-    // Vertical line
+    // Vertical line (always drawn when either local or external crosshair is active)
     ctx.beginPath();
-    ctx.moveTo(this._x, 0);
-    ctx.lineTo(this._x, chartH);
+    ctx.moveTo(drawX, 0);
+    ctx.lineTo(drawX, chartH);
     ctx.stroke();
+
+    // Horizontal line, price label and time label only shown when pointer is on this chart
+    if (!hasLocal) {
+      ctx.setLineDash([]);
+      return;
+    }
 
     // Horizontal line
     ctx.beginPath();
-    ctx.moveTo(0, this._y);
-    ctx.lineTo(chartW, this._y);
+    ctx.moveTo(0, this._y!);
+    ctx.lineTo(chartW, this._y!);
     ctx.stroke();
 
     ctx.setLineDash([]);
 
     // Price label on right scale
     if (this._config.showPriceLabel) {
-      const price = viewport.yToPrice(this._y);
+      const price = viewport.yToPrice(this._y!);
       const decimals = this._getDecimals(viewport);
       const text = price.toFixed(decimals);
       const fontSize = theme.fontSize + 1;
@@ -135,18 +179,18 @@ export class CrosshairHandler implements InputHandler {
       const labelH = fontSize + 8;
 
       ctx.fillStyle = theme.colors.crosshairLabel;
-      ctx.fillRect(chartW, this._y - labelH / 2, labelW, labelH);
+      ctx.fillRect(chartW, this._y! - labelH / 2, labelW, labelH);
       ctx.fillStyle = theme.colors.crosshairLabelText;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, chartW + 5, this._y);
+      ctx.fillText(text, chartW + 5, this._y!);
     }
 
     // Time label on bottom scale
     if (this._config.showTimeLabel) {
       const totalBars = dataManager.getTotalBars();
       if (totalBars > 0) {
-        const barIndex = viewport.xToBarIndex(this._x, totalBars);
+        const barIndex = viewport.xToBarIndex(drawX, totalBars);
         const time = dataManager.getTimeAtIndex(Math.max(0, Math.min(barIndex, totalBars - 1)));
         if (time !== null) {
           const text = formatDateTime(time);
@@ -157,11 +201,11 @@ export class CrosshairHandler implements InputHandler {
           const labelH = fontSize + 8;
 
           ctx.fillStyle = theme.colors.crosshairLabel;
-          ctx.fillRect(this._x - labelW / 2, chartH, labelW, labelH);
+          ctx.fillRect(drawX - labelW / 2, chartH, labelW, labelH);
           ctx.fillStyle = theme.colors.crosshairLabelText;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
-          ctx.fillText(text, this._x, chartH + 4);
+          ctx.fillText(text, drawX, chartH + 4);
         }
       }
     }

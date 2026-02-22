@@ -351,6 +351,24 @@ export class Chart {
     this._crosshairHandler.setMeasureEnabled(enabled);
   }
 
+  /**
+   * Drive the main chart crosshair to a specific pixel X from outside
+   * (e.g. when the user is hovering over an indicator panel).
+   * Pass null to clear the external override.
+   */
+  setCrosshairX(x: number | null): void {
+    this._crosshairHandler.setExternalX(x);
+  }
+
+  /**
+   * Register a callback that fires whenever the crosshair X position changes
+   * (from the canvas's own pointer events). The X is in canvas CSS pixel coordinates,
+   * matching exactly what the crosshair draws. Pass null to clear.
+   */
+  onCrosshairMove(cb: ((x: number | null) => void) | null): void {
+    this._crosshairHandler.setOnCrosshairMove(cb);
+  }
+
   addDrawing(config: DrawingConfig): void {
     this._drawingManager.addDrawing(config);
     this._renderer.requestDraw();
