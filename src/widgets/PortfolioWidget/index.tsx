@@ -1,13 +1,5 @@
 import { useState, useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { usePortfolioStore } from '../../store/usePortfolioStore';
 import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
@@ -56,6 +48,42 @@ export default function PortfolioWidget() {
     addTrade({ ticker: tradeTicker.toUpperCase(), side: tradeSide, quantity: qty, price });
     setTradePrice('');
   };
+
+  const equityOption = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 2, right: 0, bottom: 2, left: 0 },
+    xAxis: {
+      type: 'category',
+      data: equityCurve.map((d) => d.day),
+      show: false,
+      boundaryGap: false,
+    },
+    yAxis: {
+      type: 'value',
+      show: false,
+    },
+    tooltip: { show: false },
+    series: [
+      {
+        type: 'line',
+        data: equityCurve.map((d) => d.equity),
+        smooth: true,
+        lineStyle: { color: '#06b6d4', width: 1.5 },
+        itemStyle: { color: '#06b6d4' },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(6,182,212,0.3)' },
+              { offset: 1, color: 'rgba(6,182,212,0)' },
+            ],
+          },
+        },
+        symbol: 'none',
+      },
+    ],
+  }), [equityCurve]);
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -138,19 +166,9 @@ export default function PortfolioWidget() {
 
       {/* Equity curve */}
       {positions.length > 0 && (
-        <div className="h-20 shrink-0">
+        <div className="shrink-0">
           <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Equity Curve</div>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={equityCurve} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="equity" stroke="#06b6d4" fill="url(#equityGrad)" strokeWidth={1.5} />
-            </AreaChart>
-          </ResponsiveContainer>
+          <ReactECharts option={equityOption} style={{ height: 64, width: '100%' }} notMerge />
         </div>
       )}
     </div>

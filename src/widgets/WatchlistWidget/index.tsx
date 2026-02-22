@@ -65,10 +65,18 @@ export default function WatchlistWidget({ widgetId }: Props) {
       {/* List */}
       <div className="nodrag flex-1 overflow-y-auto space-y-0.5">
         {data.map((item) => (
-          <button
+          <div
             key={item.ticker}
+            role="button"
+            tabIndex={0}
             onClick={() => handleSelect(item.ticker)}
-            className="w-full flex items-center justify-between px-2.5 py-2 rounded hover:bg-gray-800/60 transition-colors group"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleSelect(item.ticker);
+              }
+            }}
+            className="w-full flex items-center justify-between px-2.5 py-2 rounded hover:bg-gray-800/60 transition-colors group cursor-pointer"
           >
             <div className="text-left">
               <div className="text-xs font-bold text-white">{item.ticker}</div>
@@ -81,6 +89,7 @@ export default function WatchlistWidget({ widgetId }: Props) {
               </div>
             </div>
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setWatchlist(watchlist.filter((t) => t !== item.ticker));
@@ -92,7 +101,7 @@ export default function WatchlistWidget({ widgetId }: Props) {
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-          </button>
+          </div>
         ))}
       </div>
     </div>

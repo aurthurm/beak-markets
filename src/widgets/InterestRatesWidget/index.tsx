@@ -1,15 +1,5 @@
 import { useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-  ReferenceLine,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { marketService } from '../../services/marketService';
 
 type Props = { ticker: string };
@@ -56,13 +46,83 @@ export default function InterestRatesWidget({ ticker }: Props) {
       quarter: `Q${(i % 4) + 1} '${Math.floor(23 + i / 4)}`,
       base: baseRates[i] ?? null,
       quote: quoteRates[i] ?? null,
-      diff: baseRates[i] != null && quoteRates[i] != null
-        ? +(baseRates[i] - quoteRates[i]).toFixed(2)
-        : null,
     }));
   }, [baseRates, quoteRates]);
 
   const hasQuoteData = quoteRates.length > 0;
+
+  const option = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 5, right: 5, bottom: hasQuoteData ? 40 : 22, left: 35 },
+    xAxis: {
+      type: 'category',
+      data: chartData.map((d) => d.quarter),
+      boundaryGap: false,
+      axisLabel: { fontSize: 8, color: '#64748b' },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 8, color: '#64748b', formatter: '{value}%' },
+      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    legend: hasQuoteData
+      ? {
+          bottom: 0,
+          textStyle: { fontSize: 9, color: '#94a3b8' },
+          itemWidth: 12,
+          itemHeight: 4,
+        }
+      : { show: false },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1e293b',
+      borderColor: '#334155',
+      borderRadius: 6,
+      textStyle: { fontSize: 10, color: '#e2e8f0' },
+      formatter: (params: any[]) =>
+        params.map((p) =>
+          `<span style="color:${p.color}">●</span> ${p.seriesName}: ${p.value != null ? `${p.value}%` : '--'}`
+        ).join('<br/>'),
+    },
+    series: [
+      {
+        name: base,
+        type: 'line',
+        data: chartData.map((d) => d.base),
+        smooth: true,
+        connectNulls: true,
+        lineStyle: { color: '#22d3ee', width: 2 },
+        itemStyle: { color: '#22d3ee' },
+        symbolSize: 4,
+        markLine: {
+          silent: true,
+          symbol: ['none', 'none'],
+          data: [{ yAxis: 0 }],
+          lineStyle: { color: '#475569', type: 'dashed', width: 1 },
+          label: { show: false },
+        },
+      },
+      ...(hasQuoteData
+        ? [
+            {
+              name: quote,
+              type: 'line',
+              data: chartData.map((d) => d.quote),
+              smooth: true,
+              connectNulls: true,
+              lineStyle: { color: '#f59e0b', width: 2 },
+              itemStyle: { color: '#f59e0b' },
+              symbolSize: 4,
+            },
+          ]
+        : []),
+    ],
+  }), [chartData, hasQuoteData, base, quote]);
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -82,25 +142,25 @@ export default function InterestRatesWidget({ ticker }: Props) {
 
       {/* Rate differential (carry) - only for pairs */}
       {isPair && (
-      <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-gray-500 uppercase tracking-wider">Carry (Rate Diff)</span>
-          <span
-            className={`text-sm font-bold font-mono px-2 py-1 rounded ${
-              rateDiff > 0
-                ? 'bg-emerald-500/15 text-emerald-400'
-                : rateDiff < 0
-                  ? 'bg-red-500/15 text-red-400'
-                  : 'bg-gray-700/50 text-gray-400'
-            }`}
-          >
-            {rateDiff > 0 ? '+' : ''}{rateDiff}%
-          </span>
+        <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wider">Carry (Rate Diff)</span>
+            <span
+              className={`text-sm font-bold font-mono px-2 py-1 rounded ${
+                rateDiff > 0
+                  ? 'bg-emerald-500/15 text-emerald-400'
+                  : rateDiff < 0
+                    ? 'bg-red-500/15 text-red-400'
+                    : 'bg-gray-700/50 text-gray-400'
+              }`}
+            >
+              {rateDiff > 0 ? '+' : ''}{rateDiff}%
+            </span>
+          </div>
+          <div className="text-[10px] text-gray-500 mt-1">
+            {rateDiff > 0 ? `Favors ${base}` : rateDiff < 0 ? `Favors ${quote}` : 'Neutral'}
+          </div>
         </div>
-        <div className="text-[10px] text-gray-500 mt-1">
-          {rateDiff > 0 ? `Favors ${base}` : rateDiff < 0 ? `Favors ${quote}` : 'Neutral'}
-        </div>
-      </div>
       )}
 
       {/* Historical rates chart */}
@@ -108,47 +168,7 @@ export default function InterestRatesWidget({ ticker }: Props) {
         <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
           Interest Rate History (%)
         </div>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="quarter" tick={{ fontSize: 8, fill: '#64748b' }} />
-            <YAxis tick={{ fontSize: 8, fill: '#64748b' }} width={30} unit="%" domain={['auto', 'auto']} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                fontSize: 10,
-              }}
-              formatter={(value: number | undefined) => [value != null ? `${value}%` : '', '']}
-            />
-            <ReferenceLine y={0} stroke="#475569" strokeDasharray="2 2" />
-            <Line
-              type="monotone"
-              dataKey="base"
-              name={base}
-              stroke="#22d3ee"
-              strokeWidth={2}
-              dot={{ r: 2, fill: '#22d3ee' }}
-              connectNulls
-            />
-            {hasQuoteData && (
-              <Line
-                type="monotone"
-                dataKey="quote"
-                name={quote}
-                stroke="#f59e0b"
-                strokeWidth={2}
-                dot={{ r: 2, fill: '#f59e0b' }}
-                connectNulls
-              />
-            )}
-            <Legend
-              wrapperStyle={{ fontSize: 9 }}
-              formatter={(value) => <span className="text-gray-400">{value}</span>}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <ReactECharts option={option} style={{ height: 120, width: '100%' }} notMerge />
       </div>
     </div>
   );

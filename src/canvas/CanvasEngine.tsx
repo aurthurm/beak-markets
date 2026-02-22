@@ -73,7 +73,7 @@ function CanvasInner() {
   const activeDashboardId = useCanvasStore((s) => s.activeDashboardId);
   const canvasMode = useCanvasStore((s) => s.canvasMode);
   const setCanvasMode = useCanvasStore((s) => s.setCanvasMode);
-  const { screenToFlowPosition, fitView } = useReactFlow();
+  const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow();
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
@@ -140,6 +140,20 @@ function CanvasInner() {
 
   const controlBtn =
     'flex items-center justify-center w-8 h-8 p-1 border-0 border-r border-gray-600 last:border-r-0 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50';
+
+  const handleFitView = useCallback(() => {
+    const currentNodes = useCanvasStore.getState().nodes;
+    const activeId = useCanvasStore.getState().activeDashboardId;
+    if (activeId === null) {
+      fitView({ nodes: currentNodes.map((n) => ({ id: n.id })), padding: 0.15, duration: 300 });
+    } else {
+      const ids = currentNodes
+        .filter((n) => (n.data as { dashboardId?: string | null }).dashboardId === activeId)
+        .map((n) => n.id);
+      if (ids.length > 0) fitView({ nodes: ids.map((id) => ({ id })), padding: 0.15, duration: 300 });
+      else fitView({ nodes: currentNodes.map((n) => ({ id: n.id })), padding: 0.15, duration: 300 });
+    }
+  }, [fitView]);
 
   return (
     <div className="w-full h-full relative">
@@ -220,6 +234,41 @@ function CanvasInner() {
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
+          </svg>
+        </button>
+
+        <div className="w-px h-6 bg-gray-600 self-center" aria-hidden />
+
+        <button
+          type="button"
+          onClick={() => zoomOut()}
+          title="Zoom out"
+          className={controlBtn}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 12h8" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomIn()}
+          title="Zoom in"
+          className={controlBtn}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v8M8 12h8" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={handleFitView}
+          title="Recenter — fit all widgets in view"
+          className={controlBtn}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
           </svg>
         </button>
       </div>

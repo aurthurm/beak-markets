@@ -72,8 +72,8 @@ export class DataManager {
           if (d.high > max) max = d.high;
         } else {
           const val = (d as LineDataPoint | HistogramDataPoint).value;
-          if (val < min) min = val;
-          if (val > max) max = val;
+          if (val !== null && val < min) min = val;
+          if (val !== null && val > max) max = val;
         }
       }
     }

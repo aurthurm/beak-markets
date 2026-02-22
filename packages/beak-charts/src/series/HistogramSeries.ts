@@ -37,7 +37,7 @@ export class HistogramSeries extends BaseSeries {
     let maxVal = 0;
     for (let i = range.startIndex; i <= range.endIndex && i < totalBars; i++) {
       const d = series.data[i]!;
-      const val = 'value' in d ? d.value : (d as OHLCV).volume ?? 0;
+      const val = 'value' in d ? (d.value ?? 0) : ((d as OHLCV).volume ?? 0);
       if (val > maxVal) maxVal = val;
     }
 
@@ -52,7 +52,7 @@ export class HistogramSeries extends BaseSeries {
 
     for (let i = range.startIndex; i <= range.endIndex && i < totalBars; i++) {
       const d = series.data[i]!;
-      const val = 'value' in d ? (d as HistogramDataPoint).value : (d as OHLCV).volume ?? 0;
+      const val = 'value' in d ? ((d as HistogramDataPoint).value ?? 0) : ((d as OHLCV).volume ?? 0);
       const x = viewport.barIndexToX(i, totalBars);
       const h = (val / maxVal) * paneHeight;
       const y = paneTop + paneHeight - h;

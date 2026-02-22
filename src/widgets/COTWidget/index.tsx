@@ -1,15 +1,5 @@
 import { useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-  ComposedChart,
-  Line,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { marketService } from '../../services/marketService';
 import { formatDate, formatCompact } from '../../utils/format';
 
@@ -74,6 +64,80 @@ export default function COTWidget({ ticker }: Props) {
     return Math.max(...vals, 1);
   }, [cot.history]);
 
+  const option = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 5, right: 5, bottom: 22, left: 38 },
+    xAxis: {
+      type: 'category',
+      data: historyData.map((h) => h.date),
+      boundaryGap: false,
+      axisLabel: { fontSize: 8, color: '#475569', interval: 3 },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      min: -maxAbs,
+      max: maxAbs,
+      axisLabel: {
+        fontSize: 8,
+        color: '#475569',
+        formatter: (v: number) => formatCompact(v),
+      },
+      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1e293b',
+      borderColor: '#334155',
+      borderRadius: 6,
+      textStyle: { fontSize: 10, color: '#e2e8f0' },
+      formatter: (params: any[]) =>
+        params.map((p) =>
+          `<span style="color:${p.color}">●</span> ${p.seriesName}: ${p.value != null ? formatCompact(p.value) : '--'}`
+        ).join('<br/>'),
+    },
+    series: [
+      {
+        name: 'Commercial',
+        type: 'line',
+        data: historyData.map((h) => h.commercial),
+        smooth: true,
+        lineStyle: { color: '#3b82f6', width: 1.5 },
+        itemStyle: { color: '#3b82f6' },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(59,130,246,0.3)' },
+              { offset: 1, color: 'rgba(59,130,246,0)' },
+            ],
+          },
+        },
+        symbol: 'none',
+        markLine: {
+          silent: true,
+          symbol: ['none', 'none'],
+          data: [{ yAxis: 0 }],
+          lineStyle: { color: '#475569', type: 'dashed', width: 1 },
+          label: { show: false },
+        },
+      },
+      {
+        name: 'Non-Commercial',
+        type: 'line',
+        data: historyData.map((h) => h.nonCommercial),
+        smooth: true,
+        lineStyle: { color: '#f59e0b', width: 2 },
+        itemStyle: { color: '#f59e0b' },
+        symbol: 'none',
+      },
+    ],
+  }), [historyData, maxAbs]);
+
   return (
     <div className="flex flex-col h-full gap-3">
       {/* Header */}
@@ -126,52 +190,11 @@ export default function COTWidget({ ticker }: Props) {
       </div>
 
       {/* Net positioning history */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-[120px]">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
           12-Week Net Position
         </div>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={historyData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id={`cotComm-${ticker}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id={`cotSpec-${ticker}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#475569' }} interval={3} />
-            <YAxis domain={[-maxAbs, maxAbs]} tick={{ fontSize: 8, fill: '#475569' }} width={35} />
-            <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                fontSize: 10,
-              }}
-              formatter={(value: number | undefined) => [value != null ? formatCompact(value) : '', '']}
-            />
-            <Area
-              type="monotone"
-              dataKey="commercial"
-              stroke="#3b82f6"
-              fill={`url(#cotComm-${ticker})`}
-              strokeWidth={1.5}
-              name="Commercial"
-            />
-            <Line
-              type="monotone"
-              dataKey="nonCommercial"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              dot={false}
-              name="Non-Commercial"
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+        <ReactECharts option={option} style={{ height: 100, width: '100%' }} notMerge />
         <div className="flex gap-4 mt-1 justify-center">
           <span className="text-[9px] text-blue-400">● Commercial (hedgers)</span>
           <span className="text-[9px] text-amber-400">— Non-Commercial (speculators)</span>

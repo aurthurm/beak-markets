@@ -13,6 +13,8 @@
     "@tailwindcss/vite": "^4.2.0",
     "@xyflow/react": "^12.10.1",
     "date-fns": "^4.1.0",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
     "framer-motion": "^12.34.3",
     "html-to-image": "^1.11.13",
     "lightweight-charts": "^5.1.0",

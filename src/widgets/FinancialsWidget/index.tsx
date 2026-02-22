@@ -1,13 +1,5 @@
 import { useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { marketService } from '../../services/marketService';
 
 type Props = { ticker: string };
@@ -36,7 +28,85 @@ export default function FinancialsWidget({ ticker }: Props) {
   );
 
   // Extract base/quote from pair like "EUR/USD"
-  const [base, quote] = ticker.includes('/') ? ticker.split('/') : [ticker, ''];
+  const [base] = ticker.includes('/') ? ticker.split('/') : [ticker, ''];
+
+  const gdpOption = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 5, right: 5, bottom: 22, left: 33 },
+    xAxis: {
+      type: 'category',
+      data: gdpData.map((d) => d.quarter),
+      axisLabel: { fontSize: 8, color: '#64748b' },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 8, color: '#64748b', formatter: '{value}%' },
+      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1e293b',
+      borderColor: '#334155',
+      borderRadius: 6,
+      textStyle: { fontSize: 10, color: '#e2e8f0' },
+      formatter: (params: any[]) => {
+        const p = params[0];
+        return `${p.name}<br/>GDP Growth: ${p.value}%`;
+      },
+    },
+    series: [
+      {
+        type: 'bar',
+        data: gdpData.map((d) => d.gdp),
+        itemStyle: { color: '#3b82f6', borderRadius: [2, 2, 0, 0] },
+        barMaxWidth: 20,
+      },
+    ],
+  }), [gdpData]);
+
+  const rateOption = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 5, right: 5, bottom: 22, left: 33 },
+    xAxis: {
+      type: 'category',
+      data: rateData.map((d) => d.quarter),
+      axisLabel: { fontSize: 8, color: '#64748b' },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 8, color: '#64748b', formatter: '{value}%' },
+      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1e293b',
+      borderColor: '#334155',
+      borderRadius: 6,
+      textStyle: { fontSize: 10, color: '#e2e8f0' },
+      formatter: (params: any[]) => {
+        const p = params[0];
+        return `${p.name}<br/>Rate: ${p.value}%`;
+      },
+    },
+    series: [
+      {
+        type: 'bar',
+        data: rateData.map((d) => d.rate),
+        itemStyle: { color: '#10b981', borderRadius: [2, 2, 0, 0] },
+        barMaxWidth: 20,
+      },
+    ],
+  }), [rateData]);
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -48,40 +118,20 @@ export default function FinancialsWidget({ ticker }: Props) {
         <MetricCard label="Trade Balance" value={`${fin.pegRatio > 0 ? '+' : ''}${fin.pegRatio}B`} positive={fin.pegRatio > 0} />
       </div>
 
-      {/* GDP Growth chart */}
-      <div className="flex-1 min-h-0">
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
-          {base} GDP Growth (%)
+      <div className="flex-1 min-h-[200px] flex flex-col gap-2">
+        <div className="shrink-0">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+            {base} GDP Growth (%)
+          </div>
+          <ReactECharts option={gdpOption} style={{ height: 80, width: '100%' }} notMerge />
         </div>
-        <ResponsiveContainer width="100%" height="45%">
-          <BarChart data={gdpData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="quarter" tick={{ fontSize: 8, fill: '#64748b' }} />
-            <YAxis tick={{ fontSize: 8, fill: '#64748b' }} width={30} unit="%" />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px', fontSize: 10 }}
-              formatter={(value: any) => [`${value}%`, 'GDP Growth']}
-            />
-            <Bar dataKey="gdp" fill="#3b82f6" radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
 
-        {/* Interest Rate chart */}
-        <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1 mt-2">
-          {base} Interest Rate (%)
+        <div className="shrink-0">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
+            {base} Interest Rate (%)
+          </div>
+          <ReactECharts option={rateOption} style={{ height: 80, width: '100%' }} notMerge />
         </div>
-        <ResponsiveContainer width="100%" height="45%">
-          <BarChart data={rateData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="quarter" tick={{ fontSize: 8, fill: '#64748b' }} />
-            <YAxis tick={{ fontSize: 8, fill: '#64748b' }} width={30} unit="%" />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px', fontSize: 10 }}
-              formatter={(value: any) => [`${value}%`, 'Rate']}
-            />
-            <Bar dataKey="rate" fill="#10b981" radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );

@@ -1,13 +1,5 @@
 import { useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ReferenceLine,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { marketService } from '../../services/marketService';
 import { formatDate } from '../../utils/format';
 
@@ -25,12 +17,71 @@ export default function SentimentWidget({ ticker }: Props) {
 
   const overallLabel = sentiment.overall > 20 ? 'Bullish' : sentiment.overall < -20 ? 'Bearish' : 'Neutral';
   const overallColor = sentiment.overall > 20 ? 'text-emerald-400' : sentiment.overall < -20 ? 'text-red-400' : 'text-gray-400';
-  const overallBg = sentiment.overall > 20 ? 'from-emerald-500' : sentiment.overall < -20 ? 'from-red-500' : 'from-gray-500';
 
   const historyData = useMemo(
     () => sentiment.history.map((h) => ({ date: formatDate(h.timestamp), value: h.value })),
     [sentiment.history]
   );
+
+  const lineColor = sentiment.overall >= 0 ? '#10b981' : '#ef4444';
+  const fillColorStart = sentiment.overall >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)';
+  const fillColorEnd = sentiment.overall >= 0 ? 'rgba(16,185,129,0)' : 'rgba(239,68,68,0)';
+
+  const option = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 5, right: 5, bottom: 22, left: 33 },
+    xAxis: {
+      type: 'category',
+      data: historyData.map((h) => h.date),
+      boundaryGap: false,
+      axisLabel: { fontSize: 8, color: '#475569', interval: 6 },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      min: -100,
+      max: 100,
+      axisLabel: { fontSize: 8, color: '#475569' },
+      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1e293b',
+      borderColor: '#334155',
+      borderRadius: 6,
+      textStyle: { fontSize: 10, color: '#e2e8f0' },
+    },
+    series: [
+      {
+        type: 'line',
+        data: historyData.map((h) => h.value),
+        smooth: true,
+        lineStyle: { color: lineColor, width: 1.5 },
+        itemStyle: { color: lineColor },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: fillColorStart },
+              { offset: 1, color: fillColorEnd },
+            ],
+          },
+        },
+        symbol: 'none',
+        markLine: {
+          silent: true,
+          symbol: ['none', 'none'],
+          data: [{ yAxis: 0 }],
+          lineStyle: { color: '#475569', type: 'dashed', width: 1 },
+          label: { show: false },
+        },
+      },
+    ],
+  }), [historyData, lineColor, fillColorStart, fillColorEnd]);
 
   return (
     <div className="flex flex-col h-full gap-3">
@@ -115,31 +166,9 @@ export default function SentimentWidget({ ticker }: Props) {
       </div>
 
       {/* Sentiment history chart */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-[120px]">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">30-Day Sentiment</div>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={historyData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id={`sentGrad-${ticker}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={sentiment.overall >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={sentiment.overall >= 0 ? '#10b981' : '#ef4444'} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#475569' }} interval={6} />
-            <YAxis domain={[-100, 100]} tick={{ fontSize: 8, fill: '#475569' }} width={30} />
-            <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '6px', fontSize: 10 }}
-            />
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke={sentiment.overall >= 0 ? '#10b981' : '#ef4444'}
-              fill={`url(#sentGrad-${ticker})`}
-              strokeWidth={1.5}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <ReactECharts option={option} style={{ height: 100, width: '100%' }} notMerge />
       </div>
     </div>
   );

@@ -170,17 +170,7 @@ export default function BeakChartWidget({ ticker }: Props) {
     chart.setInteractionMode('select');
     chartRef.current = chart;
 
-    const forceResize = () => {
-      const rect = chartPaneHostRef.current?.getBoundingClientRect() ?? container.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        chart.resize(Math.floor(rect.width), Math.floor(rect.height));
-      }
-    };
-    forceResize();
-    const raf = requestAnimationFrame(forceResize);
-
     return () => {
-      cancelAnimationFrame(raf);
       chart.onDrawingChange(null);
       chart.destroy();
       chartRef.current = null;
@@ -216,7 +206,6 @@ export default function BeakChartWidget({ ticker }: Props) {
       if (!indicator.visible) continue;
       if (indicator.placement !== 'overlay') continue;
       const series = chart.addSeries('line', {
-        priceScaleId: 'right',
         color: indicator.color,
         lineWidth: indicator.lineWidth,
       });
@@ -282,20 +271,6 @@ export default function BeakChartWidget({ ticker }: Props) {
     chart.setChartCursorMode('default');
   }, [interactionMode, navigationTool]);
 
-  useEffect(() => {
-    if (!chartPaneHostRef.current) return;
-    const el = chartPaneHostRef.current;
-    const ro = new ResizeObserver(() => {
-      const chart = chartRef.current;
-      if (!chart) return;
-      const rect = el.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        chart.resize(Math.floor(rect.width), Math.floor(rect.height));
-      }
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {

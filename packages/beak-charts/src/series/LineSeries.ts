@@ -38,7 +38,7 @@ export class LineSeries extends BaseSeries {
     let started = false;
     for (let i = startIndex; i <= endIndex && i < data.length; i++) {
       const point = data[i] as LineDataPoint;
-      if (!point || !('value' in point)) continue;
+      if (!point || !('value' in point) || point.value === null) continue;
 
       const x = viewport.barIndexToX(i, totalBars);
       const y = viewport.priceToY(point.value);
@@ -57,7 +57,7 @@ export class LineSeries extends BaseSeries {
       ctx.fillStyle = color;
       for (let i = startIndex; i <= endIndex && i < data.length; i++) {
         const point = data[i] as LineDataPoint;
-        if (!point || !('value' in point)) continue;
+        if (!point || !('value' in point) || point.value === null) continue;
         const x = viewport.barIndexToX(i, totalBars);
         const y = viewport.priceToY(point.value);
         ctx.beginPath();

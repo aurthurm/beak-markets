@@ -1,14 +1,5 @@
 import { useMemo } from 'react';
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  ReferenceLine,
-} from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { marketService } from '../../services/marketService';
 import { formatDate } from '../../utils/format';
 
@@ -56,6 +47,65 @@ export default function YieldsBondsWidget({ ticker }: Props) {
   const spreadColor = yields.spread2s10s >= 0 ? 'text-emerald-400' : 'text-amber-400';
   const spreadLabel = yields.spread2s10s >= 0 ? 'Normal' : 'Inverted';
 
+  const option = useMemo(() => ({
+    backgroundColor: 'transparent',
+    animation: false,
+    grid: { top: 5, right: 5, bottom: 22, left: 38 },
+    xAxis: {
+      type: 'category',
+      data: historyData.map((h) => h.date),
+      boundaryGap: false,
+      axisLabel: { fontSize: 8, color: '#475569', interval: 7 },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 8, color: '#475569', formatter: '{value}%' },
+      splitLine: { lineStyle: { color: '#1e293b' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#1e293b',
+      borderColor: '#334155',
+      borderRadius: 6,
+      textStyle: { fontSize: 10, color: '#e2e8f0' },
+      formatter: (params: any[]) =>
+        params.map((p) =>
+          `<span style="color:${p.color}">●</span> ${p.seriesName}: ${p.value != null ? `${p.value}%` : '--'}`
+        ).join('<br/>'),
+    },
+    series: [
+      {
+        name: '2Y',
+        type: 'line',
+        data: historyData.map((h) => h.y2),
+        smooth: true,
+        lineStyle: { color: '#3b82f6', width: 2 },
+        itemStyle: { color: '#3b82f6' },
+        symbol: 'none',
+        markLine: {
+          silent: true,
+          symbol: ['none', 'none'],
+          data: [{ yAxis: 0 }],
+          lineStyle: { color: '#475569', type: 'dashed', width: 1 },
+          label: { show: false },
+        },
+      },
+      {
+        name: '10Y',
+        type: 'line',
+        data: historyData.map((h) => h.y10),
+        smooth: true,
+        lineStyle: { color: '#10b981', width: 2 },
+        itemStyle: { color: '#10b981' },
+        symbol: 'none',
+      },
+    ],
+  }), [historyData]);
+
   return (
     <div className="flex flex-col h-full gap-3">
       {/* Header */}
@@ -102,39 +152,7 @@ export default function YieldsBondsWidget({ ticker }: Props) {
         <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">
           30-Day 2Y vs 10Y
         </div>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={historyData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="date" tick={{ fontSize: 8, fill: '#475569' }} interval={7} />
-            <YAxis domain={['auto', 'auto']} tick={{ fontSize: 8, fill: '#475569' }} width={35} tickFormatter={(v) => `${v}%`} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1e293b',
-                border: '1px solid #334155',
-                borderRadius: '6px',
-                fontSize: 10,
-              }}
-              formatter={(value: number | undefined) => [value != null ? `${value}%` : '', '']}
-            />
-            <ReferenceLine y={0} stroke="#475569" strokeDasharray="3 3" />
-            <Line
-              type="monotone"
-              dataKey="y2"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-              name="2Y"
-            />
-            <Line
-              type="monotone"
-              dataKey="y10"
-              stroke="#10b981"
-              strokeWidth={2}
-              dot={false}
-              name="10Y"
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        <ReactECharts option={option} style={{ height: 120, width: '100%' }} notMerge />
         <div className="flex gap-4 mt-1 justify-center">
           <span className="text-[9px] text-blue-400">— 2Y</span>
           <span className="text-[9px] text-emerald-400">— 10Y</span>

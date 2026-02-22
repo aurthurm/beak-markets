@@ -194,8 +194,12 @@ export class Chart {
 
     // Size
     if (this._options.autoSize) {
-      this._resizeObserver = new ResizeObserver(() => {
-        if (!this._destroyed) this._syncSize();
+      this._resizeObserver = new ResizeObserver((entries) => {
+        if (this._destroyed) return;
+        const entry = entries[0];
+        if (!entry) return;
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) this.resize(Math.floor(width), Math.floor(height));
       });
       this._resizeObserver.observe(container);
     }
