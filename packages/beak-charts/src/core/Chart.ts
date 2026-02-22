@@ -345,6 +345,14 @@ export class Chart {
     this._renderer.requestDraw();
   }
 
+  /** Zoom the X axis (time). factor > 1 zooms in, < 1 zooms out. centerX is in chart coordinates. */
+  zoomX(factor: number, centerX: number): void {
+    const totalBars = this._dataManager.getTotalBars();
+    if (totalBars <= 0) return;
+    this._viewport.zoomX(factor, centerX, totalBars);
+    this._renderer.requestDraw();
+  }
+
   destroy(): void {
     this._destroyed = true;
     this._resizeObserver?.disconnect();

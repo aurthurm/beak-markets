@@ -432,6 +432,9 @@ export class DrawingInteractionHandler implements InputHandler {
   }
 
   private _updateSelectCursor(x: number, y: number): void {
+    // Don't override cursor when over axis areas - let AxisDragHandler show zoom cursor
+    if (x >= this._viewport.chartWidth || y >= this._viewport.chartHeight) return;
+
     // Handle hover
     if (this._selectedId) {
       const tool = this._drawingManager.getDrawing(this._selectedId);

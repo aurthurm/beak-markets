@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Chart, darkTheme, lightTheme } from '@beak/charts';
+import type { Theme } from '@beak/charts';
 import type {
   SeriesHandle,
   OHLCV,
@@ -20,7 +21,6 @@ type IndicatorStyle = 'solid' | 'dashed' | 'dotted';
 type IndicatorsTab = 'indicators' | 'strategies' | 'patterns';
 type IndicatorPlacement = 'overlay' | 'bottom';
 const TIME_SCALE_HEIGHT = 24;
-const BOTTOM_PANE_FRACTION = 0.12;
 
 type IndicatorConfig = {
   id: string;
@@ -96,7 +96,6 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('select');
   const [navigationTool, setNavigationTool] = useState<NavigationTool>('select');
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
-  const [chartLayoutHeight, setChartLayoutHeight] = useState(0);
   const [viewportSync, setViewportSync] = useState<{ start: number; end: number; totalBars: number; chartWidth: number } | null>(null);
 
   const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
@@ -125,10 +124,6 @@ export default function BeakChartWidget({ ticker }: Props) {
   const pointIndex = Math.min(
     Math.max(hoverIndex ?? visiblePrices.length - 1, 0),
     Math.max(visiblePrices.length - 1, 0),
-  );
-  const bottomIndicators = useMemo(
-    () => indicators.filter((i) => i.visible && i.placement === 'bottom'),
-    [indicators],
   );
 
   useEffect(() => {
@@ -276,16 +271,6 @@ export default function BeakChartWidget({ ticker }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!chartAreaRef.current) return;
-    const el = chartAreaRef.current;
-    const update = () => setChartLayoutHeight(Math.floor(el.getBoundingClientRect().height));
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
     const close = (e: MouseEvent) => {
       const target = e.target as Node;
       if (timeframeDropdownRef.current?.contains(target)) return;
@@ -417,14 +402,6 @@ export default function BeakChartWidget({ ticker }: Props) {
   }, [visiblePrices.length]);
 
   const settingsIndicator = indicators.find((i) => i.id === settingsIndicatorId) ?? null;
-  const bottomCount = bottomIndicators.length;
-  const indicatorPaneHeight = bottomCount > 0
-    ? Math.max(56, Math.min(140, Math.round(chartLayoutHeight * BOTTOM_PANE_FRACTION)))
-    : 0;
-  const indicatorsTotalHeight = bottomCount > 0
-    ? bottomCount * indicatorPaneHeight
-    : 0;
-  const chartPaneHeight = Math.max(120, chartLayoutHeight - TIME_SCALE_HEIGHT - indicatorsTotalHeight);
 
   return (
     <div className="flex flex-col h-full gap-1.5">
@@ -529,16 +506,16 @@ export default function BeakChartWidget({ ticker }: Props) {
 
       <div
         ref={chartAreaRef}
-        className="relative flex-1 min-h-0 flex flex-col"
+        className="relative flex-1 min-h-0 flex flex-col overflow-hidden gap-px"
       >
+        {/* 1. Chart panel (top) - takes remaining space */}
         <div
           ref={chartPaneHostRef}
-          className="relative nodrag"
-          style={{ height: `${chartPaneHeight}px` }}
+          className="relative nodrag flex-1 min-h-0 overflow-hidden"
           onPointerMove={handleChartPointerMove}
           onPointerLeave={() => setHoverIndex(null)}
         >
-          <div ref={containerRef} className="absolute inset-0" />
+          <div ref={containerRef} className="absolute inset-0 w-full h-full" />
           <div className="absolute inset-0 z-[1] pointer-events-none flex items-center justify-center">
             <span className="text-[88px] leading-none font-bold tracking-[0.12em] text-slate-300/10 select-none">
               {ticker}
@@ -608,27 +585,17 @@ export default function BeakChartWidget({ ticker }: Props) {
           />
         </div>
 
-        {bottomIndicators.map((indicator) => (
-          <div
-            key={`row_${indicator.id}`}
-            className="relative nodrag"
-            style={{ height: `${indicatorPaneHeight}px` }}
-          >
-            <BottomIndicatorPane
-              indicator={indicator}
-              indicatorDataMap={indicatorDataMap}
-              pointIndex={pointIndex}
-              decimals={decimals}
-              viewportSync={viewportSync}
-            />
-          </div>
-        ))}
-
-        <div className="relative nodrag" style={{ height: `${TIME_SCALE_HEIGHT}px` }}>
+        {/* Timescale / X-axis (bottom) */}
+        <div
+          className="relative nodrag shrink-0 grow-0"
+          style={{ height: `${TIME_SCALE_HEIGHT}px` }}
+        >
           <TimescaleRow
             prices={visiblePrices}
             viewportSync={viewportSync}
             chartWidth={viewportSync?.chartWidth ?? 0}
+            theme={isDark ? darkTheme : lightTheme}
+            onZoomX={(factor, centerX) => chartRef.current?.zoomX(factor, centerX)}
           />
         </div>
 
@@ -848,64 +815,6 @@ function TinyActionButton({ label, onClick }: { label: string; onClick: () => vo
   );
 }
 
-function BottomIndicatorPane({
-  indicator,
-  indicatorDataMap,
-  pointIndex,
-  decimals,
-  viewportSync,
-}: {
-  indicator: IndicatorConfig;
-  indicatorDataMap: Map<string, LineDataPoint[]>;
-  pointIndex: number;
-  decimals: number;
-  viewportSync: { start: number; end: number; totalBars: number; chartWidth: number } | null;
-}) {
-  const allValues = (indicatorDataMap.get(indicator.id) ?? []).map((p) => p.value);
-  const start = viewportSync?.start ?? Math.max(0, allValues.length - 120);
-  const end = viewportSync?.end ?? Math.max(0, allValues.length - 1);
-  const visible = allValues.slice(Math.max(0, start), Math.min(allValues.length, end + 1));
-  const numeric = visible.filter((v): v is number => v !== null);
-  const maxAbs = Math.max(...numeric.map((v) => Math.abs(v)), 1);
-  const barCount = Math.max(1, end - start + 1);
-  const width = Math.max(120, Math.floor(viewportSync?.chartWidth ?? 120));
-  const barW = Math.max(1, width / barCount);
-  const current = (indicatorDataMap.get(indicator.id) ?? [])[pointIndex]?.value ?? null;
-
-  return (
-    <div className="h-full rounded-lg border border-slate-700/70 bg-slate-900/92 p-2 pointer-events-auto">
-      <div className="flex items-center justify-between text-[11px]">
-        <span className="text-slate-200">{indicatorLabel(indicator)}</span>
-        <span className="font-mono text-slate-300">
-          {current == null ? '--' : current.toFixed(decimals)}
-        </span>
-      </div>
-      <div className="mt-1 rounded bg-slate-950/70 border border-slate-800/80 overflow-x-auto">
-        <svg width={width} height={58} viewBox={`0 0 ${width} 58`} preserveAspectRatio="none">
-          <line x1="0" y1="29" x2={width} y2="29" stroke="#334155" strokeWidth="1" />
-          {visible.map((v, i) => {
-            if (v == null) return null;
-            const x = i * barW + 1;
-            const h = Math.max(1, Math.min(24, (Math.abs(v) / maxAbs) * 24));
-            const y = v >= 0 ? 29 - h : 29;
-            return (
-              <rect
-                key={`${indicator.id}_${i}`}
-                x={x}
-                y={y}
-                width={Math.max(1, barW - 1)}
-                height={h}
-                fill={v >= 0 ? '#22c55e' : '#ef4444'}
-                opacity="0.85"
-              />
-            );
-          })}
-        </svg>
-      </div>
-    </div>
-  );
-}
-
 function ChevronSmallIcon({ open }: { open: boolean }) {
   return (
     <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: `rotate(${open ? 180 : 0}deg)`, transition: 'transform 120ms ease' }}>
@@ -942,25 +851,75 @@ function IndicatorsIcon() {
   );
 }
 
+const ZOOM_SENSITIVITY = 0.005;
+
 function TimescaleRow({
   prices,
   viewportSync,
   chartWidth,
+  theme,
+  onZoomX,
 }: {
   prices: { timestamp: number }[];
   viewportSync: { start: number; end: number; totalBars: number; chartWidth: number } | null;
   chartWidth: number;
+  theme: Theme;
+  onZoomX: (factor: number, centerX: number) => void;
 }) {
+  const lastXRef = useRef<number | null>(null);
   const start = viewportSync?.start ?? Math.max(0, prices.length - 40);
   const end = viewportSync?.end ?? Math.max(0, prices.length - 1);
   const count = Math.max(1, end - start + 1);
   const step = Math.max(1, Math.floor(count / 6));
   const width = Math.max(120, Math.floor(chartWidth));
+  const effectiveChartWidth = viewportSync?.chartWidth ?? chartWidth;
+  const { colors, fontSize, fontFamily } = theme;
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      lastXRef.current = e.clientX;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (lastXRef.current === null) return;
+      const dx = e.clientX - lastXRef.current;
+      const factor = 1 - dx * ZOOM_SENSITIVITY;
+      const centerX = effectiveChartWidth / 2;
+      onZoomX(factor, centerX);
+      lastXRef.current = e.clientX;
+    },
+    [onZoomX, effectiveChartWidth],
+  );
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    lastXRef.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  }, []);
+
+  const handlePointerLeave = useCallback(() => {
+    lastXRef.current = null;
+  }, []);
 
   return (
-    <div className="h-full rounded-md border border-slate-700/70 bg-slate-900/90 px-1 overflow-hidden">
+    <div
+      className="h-full overflow-hidden cursor-ew-resize select-none"
+      style={{
+        background: colors.background,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
+    >
       <svg width={width} height={TIME_SCALE_HEIGHT - 2} viewBox={`0 0 ${width} ${TIME_SCALE_HEIGHT - 2}`} preserveAspectRatio="none">
-        <line x1="0" y1="1" x2={width} y2="1" stroke="#334155" strokeWidth="1" />
+        {/* Top border line - matches Y-axis border */}
+        <line x1="0" y1="0" x2={width} y2="0" stroke={colors.border} strokeWidth="1" />
         {Array.from({ length: count }).map((_, idx) => {
           if (idx % step !== 0 && idx !== count - 1) return null;
           const barIndex = start + idx;
@@ -969,8 +928,17 @@ function TimescaleRow({
           if (!ts) return null;
           return (
             <g key={`ts_${barIndex}`}>
-              <line x1={x} y1={0} x2={x} y2={6} stroke="#334155" strokeWidth="1" />
-              <text x={x} y={18} fill="#94a3b8" fontSize="10" textAnchor="middle">
+              {/* Tick mark - matches Y-axis grid style */}
+              <line x1={x} y1={0} x2={x} y2={6} stroke={colors.grid} strokeWidth="1" />
+              {/* Label - matches Y-axis text style */}
+              <text
+                x={x}
+                y={18}
+                fill={colors.text}
+                fontSize={fontSize}
+                fontFamily={fontFamily}
+                textAnchor="middle"
+              >
                 {formatTimeShort(ts)}
               </text>
             </g>
