@@ -19,7 +19,7 @@ import IndicatorPanel from './IndicatorPanel';
 type Props = { ticker: string };
 type ChartType = 'candlestick' | 'bar' | 'line';
 type Timeframe = '15m' | '1h' | '4h' | 'D' | 'W' | '2W' | '1M';
-type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd' | 'atr' | 'bb';
+type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd' | 'atr' | 'bb' | 'volume';
 type IndicatorSource = 'close' | 'open' | 'high' | 'low' | 'median';
 type IndicatorStyle = 'solid' | 'dashed' | 'dotted';
 type IndicatorsTab = 'indicators' | 'strategies' | 'patterns';
@@ -69,6 +69,7 @@ const INDICATOR_CATALOG: {
   placement?: IndicatorPlacement;
   enabled: boolean;
 }[] = [
+    { key: 'volume', label: 'Volume', type: 'volume', color: '#10b981', placement: 'overlay', enabled: true },
     { key: 'sma', label: 'Simple Moving Average (SMA)', type: 'sma', color: '#22d3ee', placement: 'overlay', enabled: true },
     { key: 'ema', label: 'Exponential Moving Average (EMA)', type: 'ema', color: '#f59e0b', placement: 'overlay', enabled: true },
     { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
@@ -88,7 +89,6 @@ export default function BeakChartWidget({ ticker }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const candleSeriesRef = useRef<SeriesHandle | null>(null);
-  const volumeSeriesRef = useRef<SeriesHandle | null>(null);
   const indicatorSeriesRefs = useRef<Map<string, SeriesHandle>>(new Map());
   const bbSeriesRefs = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
 
@@ -102,7 +102,9 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [chartTypeOpen, setChartTypeOpen] = useState(false);
 
-  const [indicators, setIndicators] = useState<IndicatorConfig[]>([]);
+  const [indicators, setIndicators] = useState<IndicatorConfig[]>([
+    { id: 'volume_default', type: 'volume', placement: 'overlay', period: 1, color: '#10b981', visible: true, source: 'close', offset: 0, lineWidth: 1, style: 'solid' },
+  ]);
   const [indicatorsModalOpen, setIndicatorsModalOpen] = useState(false);
   const [indicatorsTab, setIndicatorsTab] = useState<IndicatorsTab>('indicators');
   const [favoriteIndicatorKeys, setFavoriteIndicatorKeys] = useState<string[]>(['sma']);
@@ -215,7 +217,6 @@ export default function BeakChartWidget({ ticker }: Props) {
       chart.destroy();
       chartRef.current = null;
       candleSeriesRef.current = null;
-      volumeSeriesRef.current = null;
       indicatorSeriesMap.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -226,7 +227,6 @@ export default function BeakChartWidget({ ticker }: Props) {
     if (!chart) return;
 
     candleSeriesRef.current?.remove();
-    volumeSeriesRef.current?.remove();
     for (const h of indicatorSeriesRefs.current.values()) h.remove();
     indicatorSeriesRefs.current.clear();
     for (const bb of bbSeriesRefs.current.values()) { bb.upper.remove(); bb.lower.remove(); }
@@ -238,17 +238,22 @@ export default function BeakChartWidget({ ticker }: Props) {
         ? chart.addSeries('bar')
         : chart.addSeries('line');
 
-    const volumeSeries = chart.addSeries('histogram');
     candleSeriesRef.current = mainSeries;
-    volumeSeriesRef.current = volumeSeries;
-
-    updateData(visiblePrices, mainSeries, volumeSeries, chartType);
+    updateData(visiblePrices, mainSeries, chartType);
 
     for (const indicator of indicators) {
       if (!indicator.visible) continue;
       if (indicator.placement !== 'overlay') continue;
 
-      if (indicator.type === 'bb') {
+      if (indicator.type === 'volume') {
+        const series = chart.addSeries('histogram');
+        series.setData(visiblePrices.map((p): HistogramDataPoint => ({
+          time: p.timestamp,
+          value: p.volume,
+          color: p.close >= p.open ? `${indicator.color}55` : '#ef444455',
+        })));
+        indicatorSeriesRefs.current.set(indicator.id, series);
+      } else if (indicator.type === 'bb') {
         const bands = bbBandDataMap.get(indicator.id);
         const middleSeries = chart.addSeries('line', { color: indicator.color, lineWidth: indicator.lineWidth });
         middleSeries.setData(indicatorDataMap.get(indicator.id) ?? []);
@@ -269,19 +274,27 @@ export default function BeakChartWidget({ ticker }: Props) {
   }, [chartType, indicators, indicatorDataMap, bbBandDataMap]);
 
   useEffect(() => {
-    if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
-    updateData(visiblePrices, candleSeriesRef.current, volumeSeriesRef.current, chartType);
+    if (!candleSeriesRef.current) return;
+    updateData(visiblePrices, candleSeriesRef.current, chartType);
 
     for (const indicator of indicators) {
       if (indicator.placement !== 'overlay') continue;
       const series = indicatorSeriesRefs.current.get(indicator.id);
       if (!series) continue;
-      series.setData(indicatorDataMap.get(indicator.id) ?? []);
-      if (indicator.type === 'bb') {
-        const bands = bbBandDataMap.get(indicator.id);
-        const bb = bbSeriesRefs.current.get(indicator.id);
-        bb?.upper.setData(bands?.upper ?? []);
-        bb?.lower.setData(bands?.lower ?? []);
+      if (indicator.type === 'volume') {
+        series.setData(visiblePrices.map((p): HistogramDataPoint => ({
+          time: p.timestamp,
+          value: p.volume,
+          color: p.close >= p.open ? `${indicator.color}55` : '#ef444455',
+        })));
+      } else {
+        series.setData(indicatorDataMap.get(indicator.id) ?? []);
+        if (indicator.type === 'bb') {
+          const bands = bbBandDataMap.get(indicator.id);
+          const bb = bbSeriesRefs.current.get(indicator.id);
+          bb?.upper.setData(bands?.upper ?? []);
+          bb?.lower.setData(bands?.lower ?? []);
+        }
       }
     }
   }, [visiblePrices, indicators, indicatorDataMap, chartType]);
@@ -426,6 +439,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       macd: { period: 12, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
       atr: { period: 14 },
       bb: { period: 20, bbStdDev: 2 },
+      volume: { period: 1 },
     };
     const d = defaults[entry.type] ?? {};
     setIndicators((prev) => [
@@ -792,9 +806,11 @@ export default function BeakChartWidget({ ticker }: Props) {
                           <div className="text-[10px] text-slate-500">
                             {!entry.enabled
                               ? 'Not available yet'
-                              : entry.placement === 'bottom'
-                                ? 'Bottom panel indicator'
-                                : 'Default rolling window: 9'}
+                              : entry.key === 'volume'
+                                ? 'Overlay on main chart'
+                                : entry.placement === 'bottom'
+                                  ? 'Bottom panel indicator'
+                                  : 'Default rolling window: 9'}
                           </div>
                         </div>
 
@@ -860,6 +876,7 @@ export default function BeakChartWidget({ ticker }: Props) {
                   />
                 </label>
 
+                {settingsIndicator.type !== 'volume' && <>
                 <label className="flex flex-col gap-1">
                   <span>Length</span>
                   <input
@@ -924,6 +941,8 @@ export default function BeakChartWidget({ ticker }: Props) {
                     className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
                   />
                 </label>
+
+                </>}
 
                 {settingsIndicator.type === 'bb' && (
                   <label className="flex flex-col gap-1">
@@ -1161,6 +1180,7 @@ function TimescaleRow({
 }
 
 function indicatorLabel(indicator: Pick<IndicatorConfig, 'type' | 'period' | 'fastPeriod' | 'slowPeriod' | 'signalPeriod' | 'bbStdDev'>): string {
+  if (indicator.type === 'volume') return 'Volume';
   if (indicator.type === 'macd') {
     return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
   }
@@ -1176,6 +1196,9 @@ function computeIndicatorData(
 ): LineDataPoint[] {
   if (indicator.type === 'bb') {
     return computeBBValues(prices, indicator).middle;
+  }
+  if (indicator.type === 'volume') {
+    return prices.map(p => ({ time: p.timestamp, value: (p as any).volume ?? null }));
   }
 
   let base: Array<number | null>;
@@ -1475,7 +1498,6 @@ function computeBottomPanelData(
 function updateData(
   prices: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }[],
   mainSeries: SeriesHandle,
-  volumeSeries: SeriesHandle,
   chartType: ChartType,
 ): void {
   if (chartType === 'line') {
@@ -1485,9 +1507,4 @@ function updateData(
       time: p.timestamp, open: p.open, high: p.high, low: p.low, close: p.close, volume: p.volume,
     })));
   }
-  volumeSeries.setData(prices.map((p): HistogramDataPoint => ({
-    time: p.timestamp,
-    value: p.volume,
-    color: p.close >= p.open ? '#10b98155' : '#ef444455',
-  })));
 }
