@@ -387,6 +387,10 @@ export class Chart {
     this._pluginHost.unregister(name);
   }
 
+  requestDraw(): void {
+    this._renderer.requestDraw();
+  }
+
   scrollToEnd(): void {
     this._viewport.scrollTo(0);
     this._renderer.requestDraw();

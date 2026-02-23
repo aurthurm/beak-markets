@@ -7,16 +7,19 @@ import type {
   HistogramDataPoint,
   LineDataPoint,
   InteractionMode,
+  FibLevel,
 } from '@beak/charts';
+import { DEFAULT_FIB_LEVELS } from '@beak/charts';
 import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { DrawingToolbar, type NavigationTool } from './DrawingToolbar';
+import { FibLevelEditor } from './FibLevelEditor';
 import IndicatorPanel from './IndicatorPanel';
 
 type Props = { ticker: string };
 type ChartType = 'candlestick' | 'bar' | 'line';
 type Timeframe = '15m' | '1h' | '4h' | 'D' | 'W' | '2W' | '1M';
-type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd';
+type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd' | 'atr' | 'bb';
 type IndicatorSource = 'close' | 'open' | 'high' | 'low' | 'median';
 type IndicatorStyle = 'solid' | 'dashed' | 'dotted';
 type IndicatorsTab = 'indicators' | 'strategies' | 'patterns';
@@ -39,6 +42,7 @@ type IndicatorConfig = {
   fastPeriod?: number;
   slowPeriod?: number;
   signalPeriod?: number;
+  bbStdDev?: number;
 };
 
 type BottomIndicatorData = {
@@ -70,7 +74,8 @@ const INDICATOR_CATALOG: {
     { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
     { key: 'rsi', label: 'Relative Strength Index (RSI)', type: 'rsi', color: '#a855f7', placement: 'bottom', enabled: true },
     { key: 'macd', label: 'MACD', type: 'macd', color: '#06b6d4', placement: 'bottom', enabled: true },
-    { key: 'bb', label: 'Bollinger Bands', enabled: false },
+    { key: 'atr', label: 'Average True Range (ATR)', type: 'atr', color: '#e879f9', placement: 'bottom', enabled: true },
+    { key: 'bb', label: 'Bollinger Bands (BB)', type: 'bb', color: '#38bdf8', placement: 'overlay', enabled: true },
   ];
 
 const STRATEGY_CATALOG = ['Mean Reversion', 'Breakout', 'Trend Follow'];
@@ -85,6 +90,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   const candleSeriesRef = useRef<SeriesHandle | null>(null);
   const volumeSeriesRef = useRef<SeriesHandle | null>(null);
   const indicatorSeriesRefs = useRef<Map<string, SeriesHandle>>(new Map());
+  const bbSeriesRefs = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
 
   const timeframeDropdownRef = useRef<HTMLDivElement>(null);
   const chartTypeDropdownRef = useRef<HTMLDivElement>(null);
@@ -110,6 +116,8 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [interactionMode, setInteractionMode] = useState<InteractionMode>('select');
   const [navigationTool, setNavigationTool] = useState<NavigationTool>('select');
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
+  const [fibEditorOpen, setFibEditorOpen] = useState(false);
+  const [fibLevels, setFibLevels] = useState<FibLevel[]>(() => DEFAULT_FIB_LEVELS.map(l => ({ ...l })));
   const [viewportSync, setViewportSync] = useState<{ start: number; end: number; totalBars: number; chartWidth: number; barSpacing: number } | null>(null);
 
   const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
@@ -131,6 +139,16 @@ export default function BeakChartWidget({ ticker }: Props) {
     const m = new Map<string, LineDataPoint[]>();
     for (const indicator of indicators) {
       m.set(indicator.id, computeIndicatorData(visiblePrices, indicator));
+    }
+    return m;
+  }, [visiblePrices, indicators]);
+
+  const bbBandDataMap = useMemo(() => {
+    const m = new Map<string, { upper: LineDataPoint[]; lower: LineDataPoint[] }>();
+    for (const indicator of indicators) {
+      if (indicator.type !== 'bb') continue;
+      const { upper, lower } = computeBBValues(visiblePrices, indicator);
+      m.set(indicator.id, { upper, lower });
     }
     return m;
   }, [visiblePrices, indicators]);
@@ -169,8 +187,24 @@ export default function BeakChartWidget({ ticker }: Props) {
     // This eliminates the clientX-vs-offsetX mismatch between the React wrapper and the canvas.
     chart.onCrosshairMove((x) => setHoverX(x));
     chart.onDrawingChange((event) => {
-      if (event.type === 'selected') setSelectedDrawingId(event.drawingId);
-      if (event.type === 'deleted') setSelectedDrawingId(null);
+      if (event.type === 'selected') {
+        setSelectedDrawingId(event.drawingId);
+        if (event.drawingId) {
+          const tool = chart.getDrawingManager().getDrawing(event.drawingId);
+          if (tool?.config.type === 'fibonacci') {
+            setFibLevels((tool.config.fibLevels ?? DEFAULT_FIB_LEVELS).map(l => ({ ...l })));
+            setFibEditorOpen(true);
+          } else {
+            setFibEditorOpen(false);
+          }
+        } else {
+          setFibEditorOpen(false);
+        }
+      }
+      if (event.type === 'deleted') {
+        setSelectedDrawingId(null);
+        setFibEditorOpen(false);
+      }
     });
     chart.setInteractionMode('select');
     chartRef.current = chart;
@@ -195,6 +229,8 @@ export default function BeakChartWidget({ ticker }: Props) {
     volumeSeriesRef.current?.remove();
     for (const h of indicatorSeriesRefs.current.values()) h.remove();
     indicatorSeriesRefs.current.clear();
+    for (const bb of bbSeriesRefs.current.values()) { bb.upper.remove(); bb.lower.remove(); }
+    bbSeriesRefs.current.clear();
 
     const mainSeries = chartType === 'candlestick'
       ? chart.addSeries('candlestick')
@@ -211,15 +247,26 @@ export default function BeakChartWidget({ ticker }: Props) {
     for (const indicator of indicators) {
       if (!indicator.visible) continue;
       if (indicator.placement !== 'overlay') continue;
-      const series = chart.addSeries('line', {
-        color: indicator.color,
-        lineWidth: indicator.lineWidth,
-      });
-      series.setData(indicatorDataMap.get(indicator.id) ?? []);
-      indicatorSeriesRefs.current.set(indicator.id, series);
+
+      if (indicator.type === 'bb') {
+        const bands = bbBandDataMap.get(indicator.id);
+        const middleSeries = chart.addSeries('line', { color: indicator.color, lineWidth: indicator.lineWidth });
+        middleSeries.setData(indicatorDataMap.get(indicator.id) ?? []);
+        indicatorSeriesRefs.current.set(indicator.id, middleSeries);
+        const bandLineWidth = Math.max(1, indicator.lineWidth * 0.7);
+        const upperSeries = chart.addSeries('line', { color: indicator.color, lineWidth: bandLineWidth });
+        upperSeries.setData(bands?.upper ?? []);
+        const lowerSeries = chart.addSeries('line', { color: indicator.color, lineWidth: bandLineWidth });
+        lowerSeries.setData(bands?.lower ?? []);
+        bbSeriesRefs.current.set(indicator.id, { upper: upperSeries, lower: lowerSeries });
+      } else {
+        const series = chart.addSeries('line', { color: indicator.color, lineWidth: indicator.lineWidth });
+        series.setData(indicatorDataMap.get(indicator.id) ?? []);
+        indicatorSeriesRefs.current.set(indicator.id, series);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chartType, indicators, indicatorDataMap]);
+  }, [chartType, indicators, indicatorDataMap, bbBandDataMap]);
 
   useEffect(() => {
     if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
@@ -230,6 +277,12 @@ export default function BeakChartWidget({ ticker }: Props) {
       const series = indicatorSeriesRefs.current.get(indicator.id);
       if (!series) continue;
       series.setData(indicatorDataMap.get(indicator.id) ?? []);
+      if (indicator.type === 'bb') {
+        const bands = bbBandDataMap.get(indicator.id);
+        const bb = bbSeriesRefs.current.get(indicator.id);
+        bb?.upper.setData(bands?.upper ?? []);
+        bb?.lower.setData(bands?.lower ?? []);
+      }
     }
   }, [visiblePrices, indicators, indicatorDataMap, chartType]);
 
@@ -351,6 +404,16 @@ export default function BeakChartWidget({ ticker }: Props) {
     chartRef.current?.deleteSelectedDrawing();
   }, []);
 
+  const handleFibLevelsChange = useCallback((levels: FibLevel[]) => {
+    setFibLevels(levels);
+    if (!selectedDrawingId || !chartRef.current) return;
+    const tool = chartRef.current.getDrawingManager().getDrawing(selectedDrawingId);
+    if (tool) {
+      tool.config.fibLevels = levels;
+      chartRef.current.requestDraw();
+    }
+  }, [selectedDrawingId]);
+
   const addIndicatorFromCatalog = useCallback((entry: {
     type: IndicatorType;
     color: string;
@@ -361,6 +424,8 @@ export default function BeakChartWidget({ ticker }: Props) {
       ao: { period: 5, source: 'median' },
       rsi: { period: 14, overbought: 70, oversold: 30 },
       macd: { period: 12, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
+      atr: { period: 14 },
+      bb: { period: 20, bbStdDev: 2 },
     };
     const d = defaults[entry.type] ?? {};
     setIndicators((prev) => [
@@ -615,6 +680,14 @@ export default function BeakChartWidget({ ticker }: Props) {
             onChangeNavigationTool={handleChangeNavigationTool}
             onDeleteSelected={handleDeleteSelected}
           />
+
+          {fibEditorOpen && (
+            <FibLevelEditor
+              levels={fibLevels}
+              onChange={handleFibLevelsChange}
+              onClose={() => setFibEditorOpen(false)}
+            />
+          )}
         </div>
 
         {/* Bottom indicator panels */}
@@ -852,6 +925,21 @@ export default function BeakChartWidget({ ticker }: Props) {
                   />
                 </label>
 
+                {settingsIndicator.type === 'bb' && (
+                  <label className="flex flex-col gap-1">
+                    <span>Std Deviations</span>
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={5}
+                      step={0.5}
+                      value={settingsIndicator.bbStdDev ?? 2}
+                      onChange={(e) => updateIndicator(settingsIndicator.id, { bbStdDev: Math.max(0.5, Math.min(5, Number(e.target.value) || 2)) })}
+                      className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                    />
+                  </label>
+                )}
+
                 {settingsIndicator.type === 'rsi' && (
                   <>
                     <label className="flex flex-col gap-1">
@@ -1072,9 +1160,12 @@ function TimescaleRow({
   );
 }
 
-function indicatorLabel(indicator: Pick<IndicatorConfig, 'type' | 'period' | 'fastPeriod' | 'slowPeriod' | 'signalPeriod'>): string {
+function indicatorLabel(indicator: Pick<IndicatorConfig, 'type' | 'period' | 'fastPeriod' | 'slowPeriod' | 'signalPeriod' | 'bbStdDev'>): string {
   if (indicator.type === 'macd') {
     return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
+  }
+  if (indicator.type === 'bb') {
+    return `BB ${indicator.period} (${indicator.bbStdDev ?? 2})`;
   }
   return `${indicator.type.toUpperCase()} ${indicator.period}`;
 }
@@ -1083,9 +1174,15 @@ function computeIndicatorData(
   prices: { timestamp: number; open: number; high: number; low: number; close: number }[],
   indicator: IndicatorConfig,
 ): LineDataPoint[] {
+  if (indicator.type === 'bb') {
+    return computeBBValues(prices, indicator).middle;
+  }
+
   let base: Array<number | null>;
   if (indicator.type === 'rsi') {
     base = computeRsiValues(prices, indicator.period);
+  } else if (indicator.type === 'atr') {
+    base = computeAtrValues(prices, indicator.period);
   } else if (indicator.type === 'macd') {
     const { macdLine } = computeMacdValues(
       prices,
@@ -1126,6 +1223,80 @@ function formatTimeShort(timestamp: number): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${month}/${day}`;
+}
+
+function computeBBValues(
+  prices: { timestamp: number; open: number; high: number; low: number; close: number }[],
+  indicator: IndicatorConfig,
+): { upper: LineDataPoint[]; middle: LineDataPoint[]; lower: LineDataPoint[] } {
+  const period = indicator.period;
+  const mult   = indicator.bbStdDev ?? 2;
+  const source = prices.map(p => getSourcePrice(p, indicator.source));
+  const sma    = computeSmaValues(source, period);
+
+  const upper: LineDataPoint[]  = [];
+  const middle: LineDataPoint[] = [];
+  const lower: LineDataPoint[]  = [];
+
+  for (let i = 0; i < prices.length; i++) {
+    const time = prices[i]!.timestamp;
+    const mid  = sma[i];
+
+    if (mid == null) {
+      upper.push({ time, value: null });
+      middle.push({ time, value: null });
+      lower.push({ time, value: null });
+      continue;
+    }
+
+    let sumSq = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const diff = source[j]! - mid;
+      sumSq += diff * diff;
+    }
+    const sd = Math.sqrt(sumSq / period);
+
+    upper.push({ time, value: mid + mult * sd });
+    middle.push({ time, value: mid });
+    lower.push({ time, value: mid - mult * sd });
+  }
+
+  return { upper, middle, lower };
+}
+
+function computeAtrValues(
+  prices: { high: number; low: number; close: number }[],
+  period: number,
+): Array<number | null> {
+  if (prices.length === 0) return [];
+
+  const result: Array<number | null> = [null]; // no ATR for first bar
+  let atr: number | null = null;
+  let sumTr = 0;
+
+  for (let i = 1; i < prices.length; i++) {
+    const { high, low } = prices[i]!;
+    const prevClose = prices[i - 1]!.close;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+
+    if (i < period) {
+      sumTr += tr;
+      result.push(null);
+      continue;
+    }
+
+    if (i === period) {
+      sumTr += tr;
+      atr = sumTr / period; // seed with simple average
+    } else {
+      // Wilder's smoothing: ATR = (ATR_prev * (period-1) + TR) / period
+      atr = (atr! * (period - 1) + tr) / period;
+    }
+
+    result.push(atr);
+  }
+
+  return result;
 }
 
 function computeAoValues(
@@ -1288,6 +1459,13 @@ function computeBottomPanelData(
       lines: [{ label: 'AO', color: indicator.color, values }],
       histogram: { values, upColor: '#22c55e88', downColor: '#ef444488' },
       referenceLines: [{ value: 0, color: '#94a3b844', dashed: true }],
+    };
+  }
+
+  if (indicator.type === 'atr') {
+    const values = computeAtrValues(prices, indicator.period);
+    return {
+      lines: [{ label: `ATR ${indicator.period}`, color: indicator.color, values }],
     };
   }
 

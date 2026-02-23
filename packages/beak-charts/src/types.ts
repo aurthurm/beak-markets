@@ -110,6 +110,22 @@ export type ChartOptions = {
 
 // ── Drawing Types ──
 
+export type FibLevel = {
+  ratio: number;
+  label: string;
+  visible: boolean;
+};
+
+export const DEFAULT_FIB_LEVELS: FibLevel[] = [
+  { ratio: 0,     label: '0',     visible: true },
+  { ratio: 0.236, label: '0.236', visible: true },
+  { ratio: 0.382, label: '0.382', visible: true },
+  { ratio: 0.5,   label: '0.5',   visible: true },
+  { ratio: 0.618, label: '0.618', visible: true },
+  { ratio: 0.786, label: '0.786', visible: true },
+  { ratio: 1,     label: '1',     visible: true },
+];
+
 export type DrawingToolType =
   | 'horizontalLine'
   | 'trendLine'
@@ -131,6 +147,7 @@ export type DrawingConfig = {
   color: string;
   lineWidth: number;
   visible: boolean;
+  fibLevels?: FibLevel[];
 };
 
 // ── Viewport Types ──

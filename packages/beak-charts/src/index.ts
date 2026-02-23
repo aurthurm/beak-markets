@@ -61,6 +61,7 @@ export type {
   DrawingToolType,
   DrawingAnchor,
   DrawingConfig,
+  FibLevel,
   VisibleRange,
   ViewportState,
   Plugin,
@@ -71,3 +72,4 @@ export type {
   TimeScaleOptions,
   PriceScaleOptions,
 } from './types.ts';
+export { DEFAULT_FIB_LEVELS } from './types.ts';
