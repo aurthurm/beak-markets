@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { Theme, BottomIndicatorData } from '@beak/charts';
 
 type ViewportSync = {
@@ -9,6 +9,8 @@ type ViewportSync = {
   barSpacing: number;
 };
 
+export type IndicatorPanelHandle = { notifyCrosshairX(x: number | null): void; };
+
 type IndicatorPanelProps = {
   indicatorId: string;
   label: string;
@@ -17,7 +19,6 @@ type IndicatorPanelProps = {
   viewportSync: ViewportSync | null;
   theme: Theme;
   hoverIndex: number | null;
-  hoverX: number | null;
   onRemove: () => void;
   onSettings: () => void;
   onToggleVisibility: () => void;
@@ -30,7 +31,7 @@ const MIN_HEIGHT = 60;
 const MAX_HEIGHT = 280;
 const PRICE_SCALE_WIDTH = 58;
 
-export default function IndicatorPanel({
+const IndicatorPanel = forwardRef<IndicatorPanelHandle, IndicatorPanelProps>(function IndicatorPanel({
   indicatorId,
   label,
   visible,
@@ -38,19 +39,20 @@ export default function IndicatorPanel({
   viewportSync,
   theme,
   hoverIndex,
-  hoverX,
   onRemove,
   onSettings,
   onToggleVisibility,
   onPointerIndex,
   onPointerX,
-}: IndicatorPanelProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
   const [collapsed, setCollapsed] = useState(false);
   const resizingRef = useRef(false);
   const resizeStartRef = useRef({ y: 0, h: 0 });
+  const hoverXRef = useRef<number | null>(null);
+  const drawRef = useRef<() => void>(() => {});
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -167,8 +169,9 @@ export default function IndicatorPanel({
       ctx.stroke();
     }
 
-    // Crosshair — use raw pixel X (passed from parent) for pixel-perfect alignment
-    // with the main chart crosshair line
+    // Crosshair — use raw pixel X from ref for pixel-perfect alignment,
+    // bypassing React state for zero-latency rendering
+    const hoverX = hoverXRef.current;
     if (hoverX != null && hoverX >= 0 && hoverX <= chartW) {
       ctx.strokeStyle = theme.colors.crosshair ?? theme.colors.text;
       ctx.lineWidth = 0.5;
@@ -196,11 +199,24 @@ export default function IndicatorPanel({
 
     // Price scale labels
     drawPriceScaleLabels(ctx, chartW, chartH, effectiveMin, effectiveMax, priceToY, theme);
-  }, [data, viewportSync, theme, hoverIndex, hoverX, visible]);
+  }, [data, viewportSync, theme, visible]);
 
   useEffect(() => {
     draw();
   }, [draw]);
+
+  // Keep drawRef current so imperative callers always invoke the latest draw
+  useEffect(() => {
+    drawRef.current = draw;
+  }, [draw]);
+
+  // Expose imperative handle for lag-free crosshair sync (bypasses React state)
+  useImperativeHandle(ref, () => ({
+    notifyCrosshairX(x: number | null) {
+      hoverXRef.current = x;
+      drawRef.current();
+    },
+  }), []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -250,6 +266,8 @@ export default function IndicatorPanel({
     const x = e.clientX - rect.left;
     const { start, end, chartWidth, barSpacing } = viewportSync;
     if (x > chartWidth || x < 0) {
+      hoverXRef.current = null;
+      drawRef.current();
       onPointerIndex(null);
       onPointerX(null);
       return;
@@ -258,6 +276,9 @@ export default function IndicatorPanel({
     const idx = Math.max(start, Math.min(end, Math.round(start + (x - barSpacing / 2) / barSpacing)));
     // Snap to bar centre so the crosshair aligns with the main chart crosshair
     const barCenterX = (idx - start + 0.5) * barSpacing;
+    // Update ref and redraw immediately (no React state round-trip) for zero latency
+    hoverXRef.current = barCenterX;
+    drawRef.current();
     onPointerIndex(idx);
     onPointerX(barCenterX);
   }, [viewportSync, onPointerIndex, onPointerX]);
@@ -355,7 +376,7 @@ export default function IndicatorPanel({
         ref={containerRef}
         className="flex-1 min-h-0 relative overflow-hidden"
         onPointerMove={handlePointerMove}
-        onPointerLeave={() => { onPointerIndex(null); onPointerX(null); }}
+        onPointerLeave={() => { hoverXRef.current = null; drawRef.current(); onPointerIndex(null); onPointerX(null); }}
       >
         <canvas
           ref={canvasRef}
@@ -365,7 +386,9 @@ export default function IndicatorPanel({
       </div>
     </div>
   );
-}
+});
+
+export default IndicatorPanel;
 
 function drawHorizontalGrid(
   ctx: CanvasRenderingContext2D,

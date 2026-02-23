@@ -30,7 +30,7 @@ import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { DrawingToolbar, type NavigationTool } from './DrawingToolbar';
 import { FibLevelEditor } from './FibLevelEditor';
-import IndicatorPanel from './IndicatorPanel';
+import IndicatorPanel, { type IndicatorPanelHandle } from './IndicatorPanel';
 
 // ── Widget-local types ────────────────────────────────────────────────────────
 
@@ -84,6 +84,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   const indicatorSeriesRefs = useRef<Map<string, SeriesHandle>>(new Map());
   const bbSeriesRefs        = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
   const fractalDataRef      = useRef<Map<string, FractalData>>(new Map());
+  const panelHandlesRef     = useRef<Map<string, IndicatorPanelHandle>>(new Map());
 
   const timeframeDropdownRef  = useRef<HTMLDivElement>(null);
   const chartTypeDropdownRef  = useRef<HTMLDivElement>(null);
@@ -109,7 +110,6 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [overlayOpen,           setOverlayOpen]           = useState(false);
   const [settingsIndicatorId,   setSettingsIndicatorId]   = useState<string | null>(null);
   const [hoverIndex,            setHoverIndex]            = useState<number | null>(null);
-  const [hoverX,                setHoverX]                = useState<number | null>(null);
 
   const [isDark,           setIsDark]           = useState(true);
   const [interactionMode,  setInteractionMode]  = useState<InteractionMode>('select');
@@ -196,7 +196,12 @@ export default function BeakChartWidget({ ticker }: Props) {
       timeScale: { height: 0 },
     });
 
-    chart.onCrosshairMove((x) => setHoverX(x));
+    // Broadcast directly to panel handles — no React state round-trip, zero latency
+    chart.onCrosshairMove((x) => {
+      for (const handle of panelHandlesRef.current.values()) {
+        handle.notifyCrosshairX(x);
+      }
+    });
     chart.onDrawingChange((event) => {
       if (event.type === 'selected') {
         setSelectedDrawingId(event.drawingId);
@@ -340,14 +345,6 @@ export default function BeakChartWidget({ ticker }: Props) {
     }
   }, [priceData, indicators]);
 
-  // ── Crosshair sync ───────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (hoverX !== null) {
-      chartRef.current?.setCrosshairX(hoverX);
-    }
-  }, [hoverX]);
-
   // ── Interaction mode ─────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -442,6 +439,14 @@ export default function BeakChartWidget({ ticker }: Props) {
   }, []);
 
   // ── Callbacks ────────────────────────────────────────────────────────────────
+
+  // Imperative crosshair broadcast from indicator panels → main chart and sibling panels
+  const handleIndicatorCrosshairX = useCallback((x: number | null) => {
+    chartRef.current?.setCrosshairX(x);
+    for (const handle of panelHandlesRef.current.values()) {
+      handle.notifyCrosshairX(x);
+    }
+  }, []);
 
   const handleChangeInteractionMode = useCallback((mode: InteractionMode) => {
     setNavigationTool('select');
@@ -726,6 +731,10 @@ export default function BeakChartWidget({ ticker }: Props) {
         {bottomIndicators.map((indicator) => (
           <IndicatorPanel
             key={indicator.id}
+            ref={(handle) => {
+              if (handle) panelHandlesRef.current.set(indicator.id, handle);
+              else panelHandlesRef.current.delete(indicator.id);
+            }}
             indicatorId={indicator.id}
             label={indicatorLabel(indicator)}
             visible={indicator.visible}
@@ -733,12 +742,11 @@ export default function BeakChartWidget({ ticker }: Props) {
             viewportSync={viewportSync}
             theme={isDark ? darkTheme : lightTheme}
             hoverIndex={hoverIndex}
-            hoverX={hoverX}
             onRemove={() => removeIndicator(indicator.id)}
             onSettings={() => setSettingsIndicatorId(indicator.id)}
             onToggleVisibility={() => updateIndicator(indicator.id, { visible: !indicator.visible })}
             onPointerIndex={setHoverIndex}
-            onPointerX={setHoverX}
+            onPointerX={handleIndicatorCrosshairX}
           />
         ))}
 
