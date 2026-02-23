@@ -116,7 +116,8 @@ export type DrawingToolType =
   | 'box'
   | 'arrow'
   | 'arrowUp'
-  | 'arrowDown';
+  | 'arrowDown'
+  | 'fibonacci';
 
 export type DrawingAnchor = {
   barIndex: number;

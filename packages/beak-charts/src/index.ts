@@ -36,6 +36,7 @@ export { HorizontalLine } from './drawing/HorizontalLine.ts';
 export { TrendLine } from './drawing/TrendLine.ts';
 export { BoxDraw } from './drawing/BoxDraw.ts';
 export { ArrowDraw } from './drawing/ArrowDraw.ts';
+export { FibonacciRetracement } from './drawing/FibonacciRetracement.ts';
 
 // Themes
 export { darkTheme } from './theme/dark.ts';

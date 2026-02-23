@@ -49,6 +49,7 @@ export class DrawingInteractionHandler implements InputHandler {
     arrow: '#06b6d4',
     arrowUp: '#22c55e',
     arrowDown: '#ef4444',
+    fibonacci: '#f59e0b',
   };
 
   constructor(
@@ -192,6 +193,23 @@ export class DrawingInteractionHandler implements InputHandler {
       ctx.fillStyle = color + '15';
       ctx.fillRect(left, top, w, h);
       ctx.strokeRect(left, top, w, h);
+    } else if (p.toolType === 'fibonacci') {
+      const fibLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+      const left  = Math.min(x0, x1);
+      const right = Math.max(x0, x1);
+      // Directional: level 0 = start anchor, level 1 = preview anchor
+      const startPrice = p.anchors[0]!.price;
+      const priceRange = p.previewAnchor!.price - startPrice;
+      for (const level of fibLevels) {
+        const price = startPrice + priceRange * level;
+        const ly = viewport.priceToY(price);
+        ctx.beginPath();
+        ctx.setLineDash(level === 0 || level === 1 ? [] : [4, 3]);
+        ctx.moveTo(left, ly);
+        ctx.lineTo(right, ly);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Anchor dots

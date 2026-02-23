@@ -7,6 +7,7 @@ import { HorizontalLine } from './HorizontalLine.ts';
 import { TrendLine } from './TrendLine.ts';
 import { BoxDraw } from './BoxDraw.ts';
 import { ArrowDraw } from './ArrowDraw.ts';
+import { FibonacciRetracement } from './FibonacciRetracement.ts';
 
 export class DrawingManager {
   private _drawings = new Map<string, BaseTool>();
@@ -72,6 +73,8 @@ export class DrawingManager {
       case 'arrowUp':
       case 'arrowDown':
         return new ArrowDraw(config);
+      case 'fibonacci':
+        return new FibonacciRetracement(config);
       default:
         return null;
     }

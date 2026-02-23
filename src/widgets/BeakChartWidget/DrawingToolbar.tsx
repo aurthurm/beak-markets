@@ -45,6 +45,11 @@ const TOOLS: { type: DrawingToolType; title: string; icon: React.ReactNode }[] =
     title: 'Arrow Down',
     icon: <ArrowDownIcon />,
   },
+  {
+    type: 'fibonacci',
+    title: 'Fibonacci Retracement',
+    icon: <FibonacciIcon />,
+  },
 ];
 
 export function DrawingToolbar({
@@ -191,12 +196,7 @@ export function DrawingToolbar({
         >
           <button
             className={`flex items-center justify-center w-8 h-7 rounded transition-all gap-px ${
-              activeMode === 'horizontalLine' ||
-              activeMode === 'trendLine' ||
-              activeMode === 'box' ||
-              activeMode === 'arrow' ||
-              activeMode === 'arrowUp' ||
-              activeMode === 'arrowDown'
+              TOOLS.some(t => t.type === activeMode)
                 ? 'text-cyan-400 bg-cyan-500/15'
                 : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700/40'
             }`}
@@ -632,6 +632,19 @@ function ArrowDownIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
       <path d="M8 13.5L13.5 5h-11L8 13.5z" />
+    </svg>
+  );
+}
+
+function FibonacciIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+      <line x1="1" y1="2"  x2="15" y2="2"  opacity="0.5" />
+      <line x1="1" y1="5"  x2="15" y2="5"  />
+      <line x1="1" y1="7"  x2="15" y2="7"  opacity="0.8" />
+      <line x1="1" y1="9"  x2="15" y2="9"  />
+      <line x1="1" y1="11" x2="15" y2="11" opacity="0.8" />
+      <line x1="1" y1="14" x2="15" y2="14" opacity="0.5" />
     </svg>
   );
 }

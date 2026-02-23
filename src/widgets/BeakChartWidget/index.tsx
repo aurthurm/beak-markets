@@ -252,13 +252,8 @@ export default function BeakChartWidget({ ticker }: Props) {
     if (!chart) return;
     chart.setCrosshairMeasureEnabled(false);
 
-    const isDrawTool =
-      interactionMode === 'horizontalLine' ||
-      interactionMode === 'trendLine' ||
-      interactionMode === 'box' ||
-      interactionMode === 'arrow' ||
-      interactionMode === 'arrowUp' ||
-      interactionMode === 'arrowDown';
+    const DRAW_TOOLS: InteractionMode[] = ['horizontalLine', 'trendLine', 'box', 'arrow', 'arrowUp', 'arrowDown', 'fibonacci'];
+    const isDrawTool = DRAW_TOOLS.includes(interactionMode);
 
     if (navigationTool === 'hand') {
       chart.setInteractionMode(null);
