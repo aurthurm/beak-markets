@@ -73,6 +73,7 @@ export class Chart {
   private _gridLayer: DrawLayer;
   private _seriesLayer: DrawLayer;
   private _drawingLayer: DrawLayer;
+  private _pluginLayer: DrawLayer;
   private _crosshairLayer: DrawLayer;
   private _scaleLayer: DrawLayer;
 
@@ -161,6 +162,23 @@ export class Chart {
       },
     };
 
+    this._pluginLayer = {
+      zIndex: 25,
+      draw: (ctx, _w, _h, theme) => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, this._viewport.chartWidth, this._viewport.chartHeight);
+        ctx.clip();
+        this._pluginHost.invoke('afterDraw', {
+          ctx,
+          width: this._viewport.chartWidth,
+          height: this._viewport.chartHeight,
+          theme,
+        });
+        ctx.restore();
+      },
+    };
+
     this._crosshairLayer = {
       zIndex: 30,
       draw: (ctx, _w, _h, theme) => {
@@ -189,6 +207,7 @@ export class Chart {
     this._renderer.addLayer(this._gridLayer);
     this._renderer.addLayer(this._seriesLayer);
     this._renderer.addLayer(this._drawingLayer);
+    this._renderer.addLayer(this._pluginLayer);
     this._renderer.addLayer(this._crosshairLayer);
     this._renderer.addLayer(this._scaleLayer);
 

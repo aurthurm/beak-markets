@@ -8,6 +8,7 @@ import type {
   LineDataPoint,
   InteractionMode,
   FibLevel,
+  Plugin,
 } from '@beak/charts';
 import { DEFAULT_FIB_LEVELS } from '@beak/charts';
 import { marketService } from '../../services/marketService';
@@ -19,7 +20,9 @@ import IndicatorPanel from './IndicatorPanel';
 type Props = { ticker: string };
 type ChartType = 'candlestick' | 'bar' | 'line';
 type Timeframe = '15m' | '1h' | '4h' | 'D' | 'W' | '2W' | '1M';
-type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd' | 'atr' | 'bb' | 'volume';
+type IndicatorType = 'sma' | 'ema' | 'ao' | 'rsi' | 'macd' | 'atr' | 'bb' | 'volume' | 'fractals';
+type FractalPoint = { barIndex: number; price: number };
+type FractalData = { up: FractalPoint[]; down: FractalPoint[]; color: string; visible: boolean };
 type IndicatorSource = 'close' | 'open' | 'high' | 'low' | 'median';
 type IndicatorStyle = 'solid' | 'dashed' | 'dotted';
 type IndicatorsTab = 'indicators' | 'strategies' | 'patterns';
@@ -77,6 +80,7 @@ const INDICATOR_CATALOG: {
     { key: 'macd', label: 'MACD', type: 'macd', color: '#06b6d4', placement: 'bottom', enabled: true },
     { key: 'atr', label: 'Average True Range (ATR)', type: 'atr', color: '#e879f9', placement: 'bottom', enabled: true },
     { key: 'bb', label: 'Bollinger Bands (BB)', type: 'bb', color: '#38bdf8', placement: 'overlay', enabled: true },
+    { key: 'fractals', label: 'Williams Fractals', type: 'fractals', color: '#f59e0b', placement: 'overlay', enabled: true },
   ];
 
 const STRATEGY_CATALOG = ['Mean Reversion', 'Breakout', 'Trend Follow'];
@@ -91,6 +95,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   const candleSeriesRef = useRef<SeriesHandle | null>(null);
   const indicatorSeriesRefs = useRef<Map<string, SeriesHandle>>(new Map());
   const bbSeriesRefs = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
+  const fractalDataRef = useRef<Map<string, FractalData>>(new Map());
 
   const timeframeDropdownRef = useRef<HTMLDivElement>(null);
   const chartTypeDropdownRef = useRef<HTMLDivElement>(null);
@@ -209,6 +214,48 @@ export default function BeakChartWidget({ ticker }: Props) {
       }
     });
     chart.setInteractionMode('select');
+
+    const fractalPlugin: Plugin = {
+      name: 'fractals',
+      hooks: {
+        afterDraw: ({ ctx }) => {
+          const viewport = chart.getViewport();
+          const dm = chart.getDataManager();
+          const totalBars = dm.getTotalBars();
+          if (totalBars === 0) return;
+          const SIZE = 5;
+          for (const fdata of fractalDataRef.current.values()) {
+            if (!fdata.visible) continue;
+            ctx.save();
+            ctx.fillStyle = fdata.color;
+            ctx.globalAlpha = 0.85;
+            for (const pt of fdata.up) {
+              const x = viewport.barIndexToX(pt.barIndex, totalBars);
+              const y = viewport.priceToY(pt.price) - SIZE - 4;
+              ctx.beginPath();
+              ctx.moveTo(x, y + SIZE);
+              ctx.lineTo(x - SIZE * 0.65, y);
+              ctx.lineTo(x + SIZE * 0.65, y);
+              ctx.closePath();
+              ctx.fill();
+            }
+            for (const pt of fdata.down) {
+              const x = viewport.barIndexToX(pt.barIndex, totalBars);
+              const y = viewport.priceToY(pt.price) + SIZE + 4;
+              ctx.beginPath();
+              ctx.moveTo(x, y - SIZE);
+              ctx.lineTo(x - SIZE * 0.65, y);
+              ctx.lineTo(x + SIZE * 0.65, y);
+              ctx.closePath();
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+        },
+      },
+    };
+    chart.addPlugin(fractalPlugin);
+
     chartRef.current = chart;
 
     return () => {
@@ -264,6 +311,8 @@ export default function BeakChartWidget({ ticker }: Props) {
         const lowerSeries = chart.addSeries('line', { color: indicator.color, lineWidth: bandLineWidth });
         lowerSeries.setData(bands?.lower ?? []);
         bbSeriesRefs.current.set(indicator.id, { upper: upperSeries, lower: lowerSeries });
+      } else if (indicator.type === 'fractals') {
+        // Drawn via plugin — no series needed
       } else {
         const series = chart.addSeries('line', { color: indicator.color, lineWidth: indicator.lineWidth });
         series.setData(indicatorDataMap.get(indicator.id) ?? []);
@@ -302,6 +351,22 @@ export default function BeakChartWidget({ ticker }: Props) {
   useEffect(() => {
     chartRef.current?.setTheme(isDark ? darkTheme : lightTheme);
   }, [isDark]);
+
+  useEffect(() => {
+    const fractalIndicators = indicators.filter((i) => i.type === 'fractals');
+    fractalDataRef.current.clear();
+    for (const indicator of fractalIndicators) {
+      const { up, down } = computeFractals(visiblePrices);
+      fractalDataRef.current.set(indicator.id, {
+        up, down,
+        color: indicator.color,
+        visible: indicator.visible,
+      });
+    }
+    if (fractalIndicators.length > 0) {
+      chartRef.current?.requestDraw();
+    }
+  }, [visiblePrices, indicators]);
 
   // When hovering an indicator panel, push its pointer X back to the main chart
   // so the main chart crosshair mirrors the indicator panel crosshair exactly.
@@ -808,9 +873,11 @@ export default function BeakChartWidget({ ticker }: Props) {
                               ? 'Not available yet'
                               : entry.key === 'volume'
                                 ? 'Overlay on main chart'
-                                : entry.placement === 'bottom'
-                                  ? 'Bottom panel indicator'
-                                  : 'Default rolling window: 9'}
+                                : entry.key === 'fractals'
+                                  ? '5-bar Williams Fractal pattern'
+                                  : entry.placement === 'bottom'
+                                    ? 'Bottom panel indicator'
+                                    : 'Default rolling window: 9'}
                           </div>
                         </div>
 
@@ -876,7 +943,7 @@ export default function BeakChartWidget({ ticker }: Props) {
                   />
                 </label>
 
-                {settingsIndicator.type !== 'volume' && <>
+                {settingsIndicator.type !== 'volume' && settingsIndicator.type !== 'fractals' && <>
                 <label className="flex flex-col gap-1">
                   <span>Length</span>
                   <input
@@ -1181,6 +1248,7 @@ function TimescaleRow({
 
 function indicatorLabel(indicator: Pick<IndicatorConfig, 'type' | 'period' | 'fastPeriod' | 'slowPeriod' | 'signalPeriod' | 'bbStdDev'>): string {
   if (indicator.type === 'volume') return 'Volume';
+  if (indicator.type === 'fractals') return 'Fractals';
   if (indicator.type === 'macd') {
     return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
   }
@@ -1199,6 +1267,9 @@ function computeIndicatorData(
   }
   if (indicator.type === 'volume') {
     return prices.map(p => ({ time: p.timestamp, value: (p as any).volume ?? null }));
+  }
+  if (indicator.type === 'fractals') {
+    return prices.map(p => ({ time: p.timestamp, value: null }));
   }
 
   let base: Array<number | null>;
@@ -1285,6 +1356,30 @@ function computeBBValues(
   }
 
   return { upper, middle, lower };
+}
+
+function computeFractals(
+  prices: { high: number; low: number }[],
+): { up: FractalPoint[]; down: FractalPoint[] } {
+  const up: FractalPoint[] = [];
+  const down: FractalPoint[] = [];
+  for (let i = 2; i < prices.length - 2; i++) {
+    const h = prices[i]!.high;
+    const l = prices[i]!.low;
+    if (
+      h > prices[i - 2]!.high && h > prices[i - 1]!.high &&
+      h > prices[i + 1]!.high && h > prices[i + 2]!.high
+    ) {
+      up.push({ barIndex: i, price: h });
+    }
+    if (
+      l < prices[i - 2]!.low && l < prices[i - 1]!.low &&
+      l < prices[i + 1]!.low && l < prices[i + 2]!.low
+    ) {
+      down.push({ barIndex: i, price: l });
+    }
+  }
+  return { up, down };
 }
 
 function computeAtrValues(
