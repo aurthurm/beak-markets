@@ -173,16 +173,33 @@ export type PluginHook =
   | 'onVisibleRangeChange'
   | 'onResize';
 
+/** Structural interface for the viewport, used in PluginContext to avoid circular imports. */
+export type PluginViewport = {
+  barIndexToX(barIndex: number, totalBars: number): number;
+  priceToY(price: number): number;
+  getVisibleRange(totalBars: number): VisibleRange;
+  readonly chartWidth: number;
+  readonly chartHeight: number;
+  readonly barSpacing: number;
+};
+
+/** Structural interface for the data manager, used in PluginContext. */
+export type PluginDataManager = {
+  getTotalBars(): number;
+};
+
 export type PluginContext = {
   ctx: CanvasRenderingContext2D;
   width: number;
   height: number;
   theme: Theme;
+  viewport: PluginViewport;
+  dataManager: PluginDataManager;
 };
 
 export type Plugin = {
   name: string;
-  hooks: Partial<Record<PluginHook, (ctx: PluginContext) => void>>;
+  hooks: Partial<Record<PluginHook, (context: PluginContext) => void>>;
 };
 
 // ── Re-exports ──

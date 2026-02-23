@@ -174,6 +174,8 @@ export class Chart {
           width: this._viewport.chartWidth,
           height: this._viewport.chartHeight,
           theme,
+          viewport: this._viewport,
+          dataManager: this._dataManager,
         });
         ctx.restore();
       },

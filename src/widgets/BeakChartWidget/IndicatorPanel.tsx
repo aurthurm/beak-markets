@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { Theme } from '@beak/charts';
-
-type BottomIndicatorData = {
-  lines: Array<{ label: string; color: string; values: (number | null)[] }>;
-  histogram?: { values: (number | null)[]; upColor: string; downColor: string };
-  referenceLines?: Array<{ value: number; color: string; dashed: boolean }>;
-  yRange?: { min: number; max: number };
-};
+import type { Theme, BottomIndicatorData } from '@beak/charts';
 
 type ViewportSync = {
   start: number;

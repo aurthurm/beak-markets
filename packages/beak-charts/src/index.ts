@@ -45,6 +45,38 @@ export { lightTheme } from './theme/light.ts';
 // Plugins
 export { PluginHost } from './plugins/PluginHost.ts';
 
+// Indicators — computation
+export {
+  getSourcePrice,
+  computeSmaValues,
+  computeEmaValues,
+  computeBBValues,
+  computeAtrValues,
+  computeRsiValues,
+  computeMacdValues,
+  computeAoValues,
+  computeFractals,
+  computeIndicatorData,
+  computeBottomPanelData,
+  indicatorLabel,
+} from './indicators/compute.ts';
+
+// Indicators — fractal plugin
+export { createFractalsPlugin } from './indicators/FractalsPlugin.ts';
+
+// Indicators — types
+export type {
+  IndicatorType,
+  IndicatorSource,
+  IndicatorStyle,
+  IndicatorPlacement,
+  IndicatorConfig,
+  BottomIndicatorData,
+  FractalPoint,
+  FractalData,
+  PriceBar,
+} from './indicators/types.ts';
+
 // Types
 export type {
   OHLCV,
@@ -67,6 +99,8 @@ export type {
   Plugin,
   PluginHook,
   PluginContext,
+  PluginViewport,
+  PluginDataManager,
   Theme,
   ThemeColors,
   TimeScaleOptions,
