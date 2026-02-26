@@ -36,6 +36,7 @@ type CanvasStore = {
   onEdgesChange: (changes: EdgeChange[]) => void;
   addWidget: (type: WidgetType, position?: { x: number; y: number }, dashboardId?: string) => void;
   removeWidget: (id: string) => void;
+  removeSelectedWidgets: () => void;
   duplicateWidget: (id: string) => void;
   updateWidgetData: (id: string, data: Partial<WidgetConfig>) => void;
   createDashboardFromSelection: (name?: string) => { id: string; name: string } | null;
@@ -113,6 +114,16 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set({
       nodes: get().nodes.filter((n) => n.id !== id),
       edges: get().edges.filter((e) => e.source !== id && e.target !== id),
+    });
+  },
+
+  removeSelectedWidgets: () => {
+    const { nodes, edges } = get();
+    const selectedIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+    if (selectedIds.size === 0) return;
+    set({
+      nodes: nodes.filter((n) => !selectedIds.has(n.id)),
+      edges: edges.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)),
     });
   },
 

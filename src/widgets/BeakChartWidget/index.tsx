@@ -15,6 +15,11 @@ import type {
   IndicatorStyle,
   BottomIndicatorData,
   FractalData,
+  KangarooTailData,
+  EngulfingData,
+  InsideBarData,
+  OpenLinesData,
+  ZigZagData,
   PriceBar,
 } from '@beak/charts';
 import {
@@ -23,8 +28,18 @@ import {
   computeBBValues,
   computeBottomPanelData,
   computeFractals,
+  computeKangarooTails,
+  computeEngulfingCandles,
+  computeInsideBars,
+  computeOpenLines,
+  computeZigZag,
   indicatorLabel,
   createFractalsPlugin,
+  createKangarooTailPlugin,
+  createEngulfingPlugin,
+  createInsideBarPlugin,
+  createOpenLinesPlugin,
+  createZigZagPlugin,
 } from '@beak/charts';
 import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
@@ -66,10 +81,60 @@ const INDICATOR_CATALOG: {
   { key: 'atr',      label: 'Average True Range (ATR)',       type: 'atr',      color: '#e879f9', placement: 'bottom',  enabled: true  },
   { key: 'bb',       label: 'Bollinger Bands (BB)',           type: 'bb',       color: '#38bdf8', placement: 'overlay', enabled: true  },
   { key: 'fractals', label: 'Williams Fractals',              type: 'fractals', color: '#f59e0b', placement: 'overlay', enabled: true  },
+  { key: 'zigzag',   label: 'ZigZag',                        type: 'zigzag',   color: '#94a3b8', placement: 'overlay', enabled: true  },
 ];
 
 const STRATEGY_CATALOG = ['Mean Reversion', 'Breakout', 'Trend Follow'];
-const PATTERN_CATALOG  = ['Double Top', 'Head & Shoulders', 'Triangle'];
+
+const PATTERN_CATALOG: {
+  key: string;
+  label: string;
+  description: string;
+  type?: IndicatorType;
+  color?: string;
+  placement?: IndicatorPlacement;
+  enabled: boolean;
+}[] = [
+  {
+    key: 'kangarooTail',
+    label: 'Kangaroo Tail',
+    description: 'Pinbar where body < 30 % of range and sits at one extreme',
+    type: 'kangarooTail',
+    color: '#f59e0b',
+    placement: 'overlay',
+    enabled: true,
+  },
+  {
+    key: 'engulfing',
+    label: 'Engulfing Candle',
+    description: 'Two-candle reversal where current range fully engulfs prior range',
+    type: 'engulfing',
+    color: '#22c55e',
+    placement: 'overlay',
+    enabled: true,
+  },
+  {
+    key: 'insideBar',
+    label: 'Inside Bar',
+    description: 'Consolidation where the prior candle range fully contains the current range',
+    type: 'insideBar',
+    color: '#a78bfa',
+    placement: 'overlay',
+    enabled: true,
+  },
+  {
+    key: 'openLines',
+    label: 'Open Lines',
+    description: 'Daily, weekly and monthly session open price lines',
+    type: 'openLines',
+    color: '#38bdf8',
+    placement: 'overlay',
+    enabled: true,
+  },
+  { key: 'doubleTop',        label: 'Double Top',        description: 'Coming soon', enabled: false },
+  { key: 'headShoulders',    label: 'Head & Shoulders',  description: 'Coming soon', enabled: false },
+  { key: 'triangle',         label: 'Triangle',          description: 'Coming soon', enabled: false },
+];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -83,8 +148,13 @@ export default function BeakChartWidget({ ticker }: Props) {
   const candleSeriesRef   = useRef<SeriesHandle | null>(null);
   const indicatorSeriesRefs = useRef<Map<string, SeriesHandle>>(new Map());
   const bbSeriesRefs        = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
-  const fractalDataRef      = useRef<Map<string, FractalData>>(new Map());
-  const panelHandlesRef     = useRef<Map<string, IndicatorPanelHandle>>(new Map());
+  const fractalDataRef        = useRef<Map<string, FractalData>>(new Map());
+  const kangarooTailDataRef   = useRef<Map<string, KangarooTailData>>(new Map());
+  const engulfingDataRef      = useRef<Map<string, EngulfingData>>(new Map());
+  const insideBarDataRef      = useRef<Map<string, InsideBarData>>(new Map());
+  const openLinesDataRef      = useRef<Map<string, OpenLinesData>>(new Map());
+  const zigzagDataRef         = useRef<Map<string, ZigZagData>>(new Map());
+  const panelHandlesRef       = useRef<Map<string, IndicatorPanelHandle>>(new Map());
 
   const timeframeDropdownRef  = useRef<HTMLDivElement>(null);
   const chartTypeDropdownRef  = useRef<HTMLDivElement>(null);
@@ -225,6 +295,11 @@ export default function BeakChartWidget({ ticker }: Props) {
 
     chart.setInteractionMode('select');
     chart.addPlugin(createFractalsPlugin(() => fractalDataRef.current));
+    chart.addPlugin(createKangarooTailPlugin(() => kangarooTailDataRef.current));
+    chart.addPlugin(createEngulfingPlugin(() => engulfingDataRef.current));
+    chart.addPlugin(createInsideBarPlugin(() => insideBarDataRef.current));
+    chart.addPlugin(createOpenLinesPlugin(() => openLinesDataRef.current));
+    chart.addPlugin(createZigZagPlugin(() => zigzagDataRef.current));
     chartRef.current = chart;
 
     return () => {
@@ -282,8 +357,15 @@ export default function BeakChartWidget({ ticker }: Props) {
         const lowerSeries = chart.addSeries('line', { color: indicator.color, lineWidth: bandLW });
         lowerSeries.setData(bands?.lower ?? []);
         bbSeriesRefs.current.set(indicator.id, { upper: upperSeries, lower: lowerSeries });
-      } else if (indicator.type === 'fractals') {
-        // Drawn via the fractals plugin — no series needed
+      } else if (
+        indicator.type === 'fractals' ||
+        indicator.type === 'kangarooTail' ||
+        indicator.type === 'engulfing' ||
+        indicator.type === 'insideBar' ||
+        indicator.type === 'openLines' ||
+        indicator.type === 'zigzag'
+      ) {
+        // Drawn via canvas plugins — no series needed
       } else {
         const series = chart.addSeries('line', { color: indicator.color, lineWidth: indicator.lineWidth });
         series.setData(indicatorDataMap.get(indicator.id) ?? []);
@@ -341,6 +423,107 @@ export default function BeakChartWidget({ ticker }: Props) {
       });
     }
     if (fractalIndicators.length > 0) {
+      chartRef.current?.requestDraw();
+    }
+  }, [priceData, indicators]);
+
+  // ── Kangaroo tail data for plugin ─────────────────────────────────────────────
+
+  useEffect(() => {
+    const ktIndicators = indicators.filter((i) => i.type === 'kangarooTail');
+    kangarooTailDataRef.current.clear();
+    for (const indicator of ktIndicators) {
+      const { bullish, bearish } = computeKangarooTails(priceData);
+      kangarooTailDataRef.current.set(indicator.id, {
+        bullish, bearish,
+        color:   indicator.color,
+        visible: indicator.visible,
+      });
+    }
+    if (ktIndicators.length > 0) {
+      chartRef.current?.requestDraw();
+    }
+  }, [priceData, indicators]);
+
+  // ── Engulfing candle data for plugin ─────────────────────────────────────────
+
+  useEffect(() => {
+    const egIndicators = indicators.filter((i) => i.type === 'engulfing');
+    engulfingDataRef.current.clear();
+    for (const indicator of egIndicators) {
+      const { bullish, bearish } = computeEngulfingCandles(priceData);
+      engulfingDataRef.current.set(indicator.id, {
+        bullish, bearish,
+        color:   indicator.color,
+        visible: indicator.visible,
+      });
+    }
+    if (egIndicators.length > 0) {
+      chartRef.current?.requestDraw();
+    }
+  }, [priceData, indicators]);
+
+  // ── Inside bar data for plugin ────────────────────────────────────────────────
+
+  useEffect(() => {
+    const ibIndicators = indicators.filter((i) => i.type === 'insideBar');
+    insideBarDataRef.current.clear();
+    for (const indicator of ibIndicators) {
+      const points = computeInsideBars(priceData);
+      insideBarDataRef.current.set(indicator.id, {
+        points,
+        color:   indicator.color,
+        visible: indicator.visible,
+      });
+    }
+    if (ibIndicators.length > 0) {
+      chartRef.current?.requestDraw();
+    }
+  }, [priceData, indicators]);
+
+  // ── Open Lines data for plugin ────────────────────────────────────────────────
+
+  useEffect(() => {
+    const olIndicators = indicators.filter((i) => i.type === 'openLines');
+    openLinesDataRef.current.clear();
+    for (const indicator of olIndicators) {
+      const { daily, weekly, monthly } = computeOpenLines(priceData, {
+        lookbackDays:     indicator.openLinesLookbackDays ?? 90,
+        dailyStartHour:   indicator.dailyOpenHour         ?? 0,
+        weeklyStartHour:  indicator.weeklyOpenHour         ?? 0,
+        monthlyStartHour: indicator.monthlyOpenHour        ?? 0,
+      });
+      openLinesDataRef.current.set(indicator.id, {
+        daily, weekly, monthly,
+        showDaily:    indicator.showDailyOpen   ?? true,
+        showWeekly:   indicator.showWeeklyOpen  ?? true,
+        showMonthly:  indicator.showMonthlyOpen ?? true,
+        dailyColor:   indicator.dailyOpenColor   ?? '#38bdf8',
+        weeklyColor:  indicator.weeklyOpenColor  ?? '#a78bfa',
+        monthlyColor: indicator.monthlyOpenColor ?? '#f59e0b',
+        visible:      indicator.visible,
+      });
+    }
+    if (olIndicators.length > 0) {
+      chartRef.current?.requestDraw();
+    }
+  }, [priceData, indicators]);
+
+  // ── ZigZag data for plugin ────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const zzIndicators = indicators.filter((i) => i.type === 'zigzag');
+    zigzagDataRef.current.clear();
+    for (const indicator of zzIndicators) {
+      const points = computeZigZag(priceData, indicator.period);
+      zigzagDataRef.current.set(indicator.id, {
+        points,
+        color:     indicator.color,
+        lineWidth: indicator.lineWidth,
+        visible:   indicator.visible,
+      });
+    }
+    if (zzIndicators.length > 0) {
       chartRef.current?.requestDraw();
     }
   }, [priceData, indicators]);
@@ -483,7 +666,18 @@ export default function BeakChartWidget({ ticker }: Props) {
       atr:      { period: 14 },
       bb:       { period: 20, bbStdDev: 2 },
       volume:   { period: 1 },
-      fractals: { period: 5 },
+      fractals:     { period: 5 },
+      kangarooTail: { period: 1 },
+      engulfing:    { period: 1 },
+      insideBar:    { period: 1 },
+      openLines: {
+        period: 1,
+        showDailyOpen: true, showWeeklyOpen: true, showMonthlyOpen: true,
+        dailyOpenHour: 0, weeklyOpenHour: 0, monthlyOpenHour: 0,
+        openLinesLookbackDays: 90,
+        dailyOpenColor: '#38bdf8', weeklyOpenColor: '#a78bfa', monthlyOpenColor: '#f59e0b',
+      },
+      zigzag:       { period: 1 },   // 1 % deviation
     };
     const d = defaults[entry.type] ?? {};
     setIndicators((prev) => [
@@ -860,10 +1054,26 @@ export default function BeakChartWidget({ ticker }: Props) {
                 )}
 
                 {indicatorsTab === 'patterns' && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {PATTERN_CATALOG.map((name) => (
-                      <div key={name} className="rounded-md border border-slate-800 bg-slate-900 px-2 py-2 text-slate-500 text-xs">
-                        {name} (coming soon)
+                  <div className="flex flex-col gap-2">
+                    {PATTERN_CATALOG.map((entry) => (
+                      <div
+                        key={entry.key}
+                        className={`rounded-md border px-2 py-1.5 flex items-center gap-2 ${entry.enabled ? 'border-slate-700/70 bg-slate-800/70' : 'border-slate-800 bg-slate-900'}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-xs truncate ${entry.enabled ? 'text-slate-200' : 'text-slate-500'}`}>{entry.label}</div>
+                          <div className="text-[10px] text-slate-500">{entry.description}</div>
+                        </div>
+                        <button
+                          disabled={!entry.enabled}
+                          onClick={() => {
+                            if (!entry.type || !entry.color || !entry.placement) return;
+                            addIndicatorFromCatalog({ type: entry.type, color: entry.color, placement: entry.placement });
+                          }}
+                          className={`h-7 px-2 rounded text-[11px] ${entry.enabled ? 'text-cyan-200 bg-cyan-600/20 hover:bg-cyan-600/30' : 'text-slate-500 bg-slate-900 cursor-not-allowed'}`}
+                        >
+                          {entry.enabled ? 'Add' : 'Soon'}
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -883,17 +1093,42 @@ export default function BeakChartWidget({ ticker }: Props) {
               </div>
 
               <div className="pt-2 grid grid-cols-2 gap-2 text-xs text-slate-200">
-                <label className="flex flex-col gap-1">
-                  <span>Color</span>
-                  <input
-                    type="color"
-                    value={settingsIndicator.color}
-                    onChange={(e) => updateIndicator(settingsIndicator.id, { color: e.target.value })}
-                    className="h-8 rounded bg-transparent"
-                  />
-                </label>
+                {settingsIndicator.type !== 'openLines' && (
+                  <label className="flex flex-col gap-1">
+                    <span>Color</span>
+                    <input
+                      type="color"
+                      value={settingsIndicator.color}
+                      onChange={(e) => updateIndicator(settingsIndicator.id, { color: e.target.value })}
+                      className="h-8 rounded bg-transparent"
+                    />
+                  </label>
+                )}
 
-                {settingsIndicator.type !== 'volume' && settingsIndicator.type !== 'fractals' && <>
+                {settingsIndicator.type === 'zigzag' && (
+                  <>
+                    <label className="flex flex-col gap-1">
+                      <span>Deviation (%)</span>
+                      <input
+                        type="number" min={0.5} max={20} step={0.5}
+                        value={settingsIndicator.period}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { period: Math.max(0.5, Math.min(20, Number(e.target.value) || 5)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span>Line Width</span>
+                      <input
+                        type="number" min={1} max={6} step={0.5}
+                        value={settingsIndicator.lineWidth}
+                        onChange={(e) => updateIndicator(settingsIndicator.id, { lineWidth: Math.max(1, Math.min(6, Number(e.target.value) || 1.5)) })}
+                        className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                      />
+                    </label>
+                  </>
+                )}
+
+                {settingsIndicator.type !== 'volume' && settingsIndicator.type !== 'fractals' && settingsIndicator.type !== 'kangarooTail' && settingsIndicator.type !== 'engulfing' && settingsIndicator.type !== 'insideBar' && settingsIndicator.type !== 'openLines' && settingsIndicator.type !== 'zigzag' && <>
                   <label className="flex flex-col gap-1">
                     <span>Length</span>
                     <input type="number" min={2} max={300} value={settingsIndicator.period}
@@ -935,6 +1170,92 @@ export default function BeakChartWidget({ ticker }: Props) {
                       className="h-8 px-2 rounded bg-slate-800 border border-slate-700" />
                   </label>
                 </>}
+
+                {settingsIndicator.type === 'openLines' && (() => {
+                  const ind = settingsIndicator;
+                  const upd = (patch: Partial<IndicatorConfig>) => updateIndicator(ind.id, patch);
+                  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+                  return (
+                    <>
+                      {/* Lookback */}
+                      <label className="col-span-2 flex flex-col gap-1">
+                        <span>Lookback (days)</span>
+                        <input
+                          type="number" min={7} max={730}
+                          value={ind.openLinesLookbackDays ?? 90}
+                          onChange={(e) => upd({ openLinesLookbackDays: clamp(Number(e.target.value) || 90, 7, 730) })}
+                          className="h-8 px-2 rounded bg-slate-800 border border-slate-700"
+                        />
+                      </label>
+
+                      {/* Daily */}
+                      <div className="col-span-2 border-t border-slate-700/60 pt-1 text-[10px] uppercase tracking-wide text-slate-400">Daily</div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={ind.showDailyOpen ?? true}
+                          onChange={(e) => upd({ showDailyOpen: e.target.checked })} />
+                        <span>Visible</span>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span>Color</span>
+                        <input type="color" value={ind.dailyOpenColor ?? '#38bdf8'}
+                          onChange={(e) => upd({ dailyOpenColor: e.target.value })}
+                          className="h-8 rounded bg-transparent" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span>Start (UTC hr 0–23)</span>
+                        <input type="number" min={0} max={23}
+                          value={ind.dailyOpenHour ?? 0}
+                          onChange={(e) => upd({ dailyOpenHour: clamp(Number(e.target.value) || 0, 0, 23) })}
+                          className="h-8 px-2 rounded bg-slate-800 border border-slate-700" />
+                      </label>
+                      <div />
+
+                      {/* Weekly */}
+                      <div className="col-span-2 border-t border-slate-700/60 pt-1 text-[10px] uppercase tracking-wide text-slate-400">Weekly</div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={ind.showWeeklyOpen ?? true}
+                          onChange={(e) => upd({ showWeeklyOpen: e.target.checked })} />
+                        <span>Visible</span>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span>Color</span>
+                        <input type="color" value={ind.weeklyOpenColor ?? '#a78bfa'}
+                          onChange={(e) => upd({ weeklyOpenColor: e.target.value })}
+                          className="h-8 rounded bg-transparent" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span>Start (UTC hr 0–23)</span>
+                        <input type="number" min={0} max={23}
+                          value={ind.weeklyOpenHour ?? 0}
+                          onChange={(e) => upd({ weeklyOpenHour: clamp(Number(e.target.value) || 0, 0, 23) })}
+                          className="h-8 px-2 rounded bg-slate-800 border border-slate-700" />
+                      </label>
+                      <div />
+
+                      {/* Monthly */}
+                      <div className="col-span-2 border-t border-slate-700/60 pt-1 text-[10px] uppercase tracking-wide text-slate-400">Monthly</div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={ind.showMonthlyOpen ?? true}
+                          onChange={(e) => upd({ showMonthlyOpen: e.target.checked })} />
+                        <span>Visible</span>
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span>Color</span>
+                        <input type="color" value={ind.monthlyOpenColor ?? '#f59e0b'}
+                          onChange={(e) => upd({ monthlyOpenColor: e.target.value })}
+                          className="h-8 rounded bg-transparent" />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span>Start (UTC hr 0–23)</span>
+                        <input type="number" min={0} max={23}
+                          value={ind.monthlyOpenHour ?? 0}
+                          onChange={(e) => upd({ monthlyOpenHour: clamp(Number(e.target.value) || 0, 0, 23) })}
+                          className="h-8 px-2 rounded bg-slate-800 border border-slate-700" />
+                      </label>
+                      <div />
+                    </>
+                  );
+                })()}
 
                 {settingsIndicator.type === 'bb' && (
                   <label className="flex flex-col gap-1">

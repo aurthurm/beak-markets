@@ -73,6 +73,7 @@ function CanvasInner() {
   const activeDashboardId = useCanvasStore((s) => s.activeDashboardId);
   const canvasMode = useCanvasStore((s) => s.canvasMode);
   const setCanvasMode = useCanvasStore((s) => s.setCanvasMode);
+  const removeSelectedWidgets = useCanvasStore((s) => s.removeSelectedWidgets);
   const { screenToFlowPosition, fitView, zoomIn, zoomOut } = useReactFlow();
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -112,6 +113,23 @@ function CanvasInner() {
       }
     }
   }, [activeDashboardId, fitView]);
+
+  // Delete selected widgets with Delete / Backspace
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) return;
+      e.preventDefault();
+      removeSelectedWidgets();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [removeSelectedWidgets]);
 
   // Auto-save layout on changes
   useEffect(() => {

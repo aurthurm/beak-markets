@@ -56,6 +56,11 @@ export {
   computeMacdValues,
   computeAoValues,
   computeFractals,
+  computeKangarooTails,
+  computeEngulfingCandles,
+  computeInsideBars,
+  computeOpenLines,
+  computeZigZag,
   computeIndicatorData,
   computeBottomPanelData,
   indicatorLabel,
@@ -63,6 +68,21 @@ export {
 
 // Indicators — fractal plugin
 export { createFractalsPlugin } from './indicators/FractalsPlugin.ts';
+
+// Indicators — kangaroo tail plugin
+export { createKangarooTailPlugin } from './indicators/KangarooTailPlugin.ts';
+
+// Indicators — engulfing candle plugin
+export { createEngulfingPlugin } from './indicators/EngulfingPlugin.ts';
+
+// Indicators — inside bar plugin
+export { createInsideBarPlugin } from './indicators/InsideBarPlugin.ts';
+
+// Indicators — open lines plugin
+export { createOpenLinesPlugin } from './indicators/OpenLinesPlugin.ts';
+
+// Indicators — zigzag plugin
+export { createZigZagPlugin } from './indicators/ZigZagPlugin.ts';
 
 // Indicators — types
 export type {
@@ -74,6 +94,16 @@ export type {
   BottomIndicatorData,
   FractalPoint,
   FractalData,
+  KangarooTailPoint,
+  KangarooTailData,
+  EngulfingPoint,
+  EngulfingData,
+  InsideBarPoint,
+  InsideBarData,
+  OpenLineSegment,
+  OpenLinesData,
+  ZigZagPoint,
+  ZigZagData,
   PriceBar,
 } from './indicators/types.ts';
 

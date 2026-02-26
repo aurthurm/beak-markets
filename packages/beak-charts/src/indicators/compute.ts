@@ -4,6 +4,11 @@ import type {
   IndicatorSource,
   BottomIndicatorData,
   FractalPoint,
+  KangarooTailPoint,
+  EngulfingPoint,
+  InsideBarPoint,
+  OpenLineSegment,
+  ZigZagPoint,
   PriceBar,
 } from './types.ts';
 
@@ -197,12 +202,298 @@ export function computeFractals(prices: PriceBar[]): { up: FractalPoint[]; down:
   return { up, down };
 }
 
+// ── Kangaroo Tail (Pinbar) ────────────────────────────────────────────────────
+//
+// Detection rules:
+//   1. body (|close - open|) < 30 % of the full candle range (high - low)
+//   2. Bullish hammer: lower wick > upper wick AND body sits in the upper
+//      65 % of the range — the long tail points downward
+//   3. Bearish shooting star: upper wick > lower wick AND body sits in the
+//      lower 65 % of the range — the long tail points upward
+//   4. Body (open & close) must lie within the previous candle's high-low range
+//   5. The kangaroo tail's full range must NOT be engulfed by the previous
+//      candle's range — the tail (wick) must poke out beyond it
+
+export function computeKangarooTails(
+  prices: PriceBar[],
+): { bullish: KangarooTailPoint[]; bearish: KangarooTailPoint[] } {
+  const bullish: KangarooTailPoint[] = [];
+  const bearish: KangarooTailPoint[] = [];
+
+  for (let i = 1; i < prices.length; i++) {
+    const { open, high, low, close } = prices[i]!;
+    const { high: prevHigh, low: prevLow } = prices[i - 1]!;
+
+    const range = high - low;
+    if (range <= 0) continue;
+
+    const body       = Math.abs(close - open);
+    if (body / range >= 0.30) continue;
+
+    const bodyTop    = Math.max(open, close);
+    const bodyBottom = Math.min(open, close);
+    const upperWick  = high - bodyTop;
+    const lowerWick  = bodyBottom - low;
+
+    // Rule 4: body must be within the previous candle's range
+    if (bodyBottom < prevLow || bodyTop > prevHigh) continue;
+
+    // Rule 5: the tail's range must not be fully engulfed by the previous candle
+    if (low >= prevLow && high <= prevHigh) continue;
+
+    // Bullish hammer — body in upper 35 % of range, tail points down
+    if (bodyBottom >= low + range * 0.65 && lowerWick > upperWick) {
+      bullish.push({ barIndex: i, price: low });
+    // Bearish shooting star — body in lower 35 % of range, tail points up
+    } else if (bodyTop <= high - range * 0.65 && upperWick > lowerWick) {
+      bearish.push({ barIndex: i, price: high });
+    }
+  }
+
+  return { bullish, bearish };
+}
+
+// ── Engulfing Candle ──────────────────────────────────────────────────────────
+//
+// Detection rules:
+//   Bullish engulfing:
+//     - Current candle is bullish (close > open)
+//     - Previous candle is bearish (close < open)
+//     - Current candle's full range engulfs previous candle's full range:
+//       current low ≤ prev low  AND  current high ≥ prev high
+//
+//   Bearish engulfing:
+//     - Current candle is bearish (close < open)
+//     - Previous candle is bullish (close > open)
+//     - Current candle's full range engulfs previous candle's full range:
+//       current low ≤ prev low  AND  current high ≥ prev high
+
+export function computeEngulfingCandles(
+  prices: PriceBar[],
+): { bullish: EngulfingPoint[]; bearish: EngulfingPoint[] } {
+  const bullish: EngulfingPoint[] = [];
+  const bearish: EngulfingPoint[] = [];
+
+  for (let i = 1; i < prices.length; i++) {
+    const curr = prices[i]!;
+    const prev = prices[i - 1]!;
+
+    // Full range of current must completely cover full range of previous
+    if (curr.low > prev.low || curr.high < prev.high) continue;
+
+    const currBullish = curr.close > curr.open;
+    const currBearish = curr.close < curr.open;
+    const prevBearish = prev.close < prev.open;
+    const prevBullish = prev.close > prev.open;
+
+    if (currBullish && prevBearish) {
+      bullish.push({ barIndex: i, price: curr.low });
+    } else if (currBearish && prevBullish) {
+      bearish.push({ barIndex: i, price: curr.high });
+    }
+  }
+
+  return { bullish, bearish };
+}
+
+// ── Inside Bar ────────────────────────────────────────────────────────────────
+//
+// Detection rule:
+//   The previous candle's full range completely contains the current candle's
+//   full range:  prev.low ≤ curr.low  AND  prev.high ≥ curr.high
+
+export function computeInsideBars(prices: PriceBar[]): InsideBarPoint[] {
+  const points: InsideBarPoint[] = [];
+
+  for (let i = 1; i < prices.length; i++) {
+    const curr = prices[i]!;
+    const prev = prices[i - 1]!;
+
+    if (curr.high <= prev.high && curr.low >= prev.low) {
+      points.push({ barIndex: i, price: curr.low });
+    }
+  }
+
+  return points;
+}
+
+// ── Open Lines ────────────────────────────────────────────────────────────────
+//
+// For each period type (daily / weekly / monthly) the function groups bars by
+// which UTC-based session they belong to (using an optional hour offset to
+// shift the session start), then records the open price of the first bar in
+// that group as the level to draw.
+
+function updateOpenGroup(
+  map: Map<string, { first: number; last: number; open: number }>,
+  key: string,
+  idx: number,
+  open: number,
+): void {
+  const g = map.get(key);
+  if (!g) { map.set(key, { first: idx, last: idx, open }); }
+  else     { g.last = idx; }
+}
+
+export function computeOpenLines(
+  prices: PriceBar[],
+  config: {
+    lookbackDays:    number;
+    dailyStartHour:  number;   // 0-23 UTC
+    weeklyStartHour: number;   // 0-23 UTC (week resets each Monday after this hour)
+    monthlyStartHour: number;  // 0-23 UTC
+  },
+): { daily: OpenLineSegment[]; weekly: OpenLineSegment[]; monthly: OpenLineSegment[] } {
+  if (prices.length === 0) return { daily: [], weekly: [], monthly: [] };
+
+  const { lookbackDays, dailyStartHour, weeklyStartHour, monthlyStartHour } = config;
+  const latestTime = prices[prices.length - 1]!.time;
+  const cutoffTime = latestTime - lookbackDays * 86_400_000;
+
+  const dailyMap   = new Map<string, { first: number; last: number; open: number }>();
+  const weeklyMap  = new Map<string, { first: number; last: number; open: number }>();
+  const monthlyMap = new Map<string, { first: number; last: number; open: number }>();
+
+  for (let i = 0; i < prices.length; i++) {
+    const p = prices[i]!;
+    if (p.time < cutoffTime) continue;
+
+    // ── Daily ──
+    const dTs = p.time - dailyStartHour * 3_600_000;
+    const dD  = new Date(dTs);
+    updateOpenGroup(
+      dailyMap,
+      `${dD.getUTCFullYear()}-${dD.getUTCMonth()}-${dD.getUTCDate()}`,
+      i, p.open,
+    );
+
+    // ── Weekly (Monday-anchored) ──
+    const wTs  = p.time - weeklyStartHour * 3_600_000;
+    const wD   = new Date(wTs);
+    const dow  = wD.getUTCDay();                    // 0=Sun…6=Sat
+    const back = dow === 0 ? 6 : dow - 1;           // days back to Monday
+    const monD = new Date(wTs - back * 86_400_000);
+    updateOpenGroup(
+      weeklyMap,
+      `W${monD.getUTCFullYear()}-${monD.getUTCMonth()}-${monD.getUTCDate()}`,
+      i, p.open,
+    );
+
+    // ── Monthly ──
+    const mTs = p.time - monthlyStartHour * 3_600_000;
+    const mD  = new Date(mTs);
+    updateOpenGroup(
+      monthlyMap,
+      `${mD.getUTCFullYear()}-${mD.getUTCMonth()}`,
+      i, p.open,
+    );
+  }
+
+  const toSegments = (
+    map: Map<string, { first: number; last: number; open: number }>,
+  ): OpenLineSegment[] =>
+    Array.from(map.values()).map(g => ({
+      startBarIndex: g.first,
+      endBarIndex:   g.last,
+      price:         g.open,
+    }));
+
+  return {
+    daily:   toSegments(dailyMap),
+    weekly:  toSegments(weeklyMap),
+    monthly: toSegments(monthlyMap),
+  };
+}
+
+// ── ZigZag ────────────────────────────────────────────────────────────────────
+//
+// Connects swing highs and lows, filtering out moves smaller than `deviationPct`%.
+//
+// Algorithm:
+//   - Seed direction from bars 0→1.
+//   - Track the running extreme (highest high in an upswing, lowest low in a downswing).
+//   - When price reverses by more than `deviationPct`% from the extreme, push the
+//     extreme as a confirmed pivot and flip direction.
+//   - Append a trailing (unconfirmed) pivot at the current extreme so the line
+//     always extends to the most recent bar.
+
+export function computeZigZag(prices: PriceBar[], deviationPct: number): ZigZagPoint[] {
+  if (prices.length < 2) return [];
+
+  const threshold = Math.max(0.001, deviationPct / 100);
+  const pivots: ZigZagPoint[] = [];
+
+  // Seed: use the close-to-close direction of the first bar to set initial state
+  let dir: 'up' | 'down';
+  let extPrice: number;
+  let extIdx = 0;
+
+  if (prices[1]!.close >= prices[0]!.close) {
+    dir      = 'up';
+    extPrice = prices[0]!.low;
+    pivots.push({ barIndex: 0, price: extPrice, type: 'low' });
+  } else {
+    dir      = 'down';
+    extPrice = prices[0]!.high;
+    pivots.push({ barIndex: 0, price: extPrice, type: 'high' });
+  }
+
+  for (let i = 1; i < prices.length; i++) {
+    const { high, low } = prices[i]!;
+
+    if (dir === 'up') {
+      if (low < extPrice * (1 - threshold)) {
+        // Reversal — confirm the swing high
+        pivots.push({ barIndex: extIdx, price: extPrice, type: 'high' });
+        dir      = 'down';
+        extPrice = low;
+        extIdx   = i;
+      } else if (high > extPrice) {
+        extPrice = high;
+        extIdx   = i;
+      }
+    } else {
+      if (high > extPrice * (1 + threshold)) {
+        // Reversal — confirm the swing low
+        pivots.push({ barIndex: extIdx, price: extPrice, type: 'low' });
+        dir      = 'up';
+        extPrice = high;
+        extIdx   = i;
+      } else if (low < extPrice) {
+        extPrice = low;
+        extIdx   = i;
+      }
+    }
+  }
+
+  // Trailing unconfirmed extreme — keeps the line current
+  pivots.push({ barIndex: extIdx, price: extPrice, type: dir === 'up' ? 'high' : 'low' });
+
+  // Always extend to the very last bar so the line is visible even when
+  // no reversal threshold has been crossed (e.g. tight range data).
+  const lastIdx = prices.length - 1;
+  if (extIdx < lastIdx) {
+    pivots.push({
+      barIndex: lastIdx,
+      price: prices[lastIdx]!.close,
+      type: dir === 'up' ? 'low' : 'high',
+    });
+  }
+
+  return pivots;
+}
+
 // ── Orchestrators ─────────────────────────────────────────────────────────────
 
 export function computeIndicatorData(prices: PriceBar[], indicator: IndicatorConfig): LineDataPoint[] {
-  if (indicator.type === 'bb')       return computeBBValues(prices, indicator).middle;
-  if (indicator.type === 'volume')   return prices.map(p => ({ time: p.time, value: p.volume ?? null }));
-  if (indicator.type === 'fractals') return prices.map(p => ({ time: p.time, value: null }));
+  if (indicator.type === 'bb')            return computeBBValues(prices, indicator).middle;
+  if (indicator.type === 'volume')        return prices.map(p => ({ time: p.time, value: p.volume ?? null }));
+  if (indicator.type === 'fractals')      return prices.map(p => ({ time: p.time, value: null }));
+  if (indicator.type === 'kangarooTail')  return prices.map(p => ({ time: p.time, value: null }));
+  if (indicator.type === 'zigzag')        return prices.map(p => ({ time: p.time, value: null }));
+  if (indicator.type === 'engulfing')     return prices.map(p => ({ time: p.time, value: null }));
+  if (indicator.type === 'insideBar')     return prices.map(p => ({ time: p.time, value: null }));
+  if (indicator.type === 'openLines')     return prices.map(p => ({ time: p.time, value: null }));
 
   let base: Array<number | null>;
   if (indicator.type === 'rsi') {
@@ -280,8 +571,13 @@ export function computeBottomPanelData(prices: PriceBar[], indicator: IndicatorC
 export function indicatorLabel(
   indicator: Pick<IndicatorConfig, 'type' | 'period' | 'fastPeriod' | 'slowPeriod' | 'signalPeriod' | 'bbStdDev'>,
 ): string {
-  if (indicator.type === 'volume')   return 'Volume';
-  if (indicator.type === 'fractals') return 'Fractals';
+  if (indicator.type === 'volume')        return 'Volume';
+  if (indicator.type === 'fractals')      return 'Fractals';
+  if (indicator.type === 'kangarooTail')  return 'Kangaroo Tail';
+  if (indicator.type === 'zigzag')        return `ZigZag ${indicator.period}%`;
+  if (indicator.type === 'engulfing')     return 'Engulfing Candle';
+  if (indicator.type === 'insideBar')     return 'Inside Bar';
+  if (indicator.type === 'openLines')     return 'Open Lines';
   if (indicator.type === 'macd') {
     return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
   }

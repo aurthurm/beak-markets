@@ -8,28 +8,12 @@ import { captureArea, downloadImage } from './utils/capture';
 
 export default function App() {
   const loadLayout = useCanvasStore((s) => s.loadLayout);
-  const nodes = useCanvasStore((s) => s.nodes);
-  const addWidget = useCanvasStore((s) => s.addWidget);
   const captureMode = useCanvasStore((s) => s.captureMode);
   const setCaptureMode = useCanvasStore((s) => s.setCaptureMode);
 
   useEffect(() => {
     loadLayout();
   }, [loadLayout]);
-
-  // If no saved layout, create a default workspace
-  useEffect(() => {
-    if (nodes.length === 0) {
-      addWidget('chart', { x: 50, y: 50 });
-      addWidget('watchlist', { x: 700, y: 50 });
-      addWidget('news', { x: 1040, y: 50 });
-      addWidget('sentiment', { x: 50, y: 520 });
-      addWidget('financials', { x: 500, y: 520 });
-      addWidget('valuation', { x: 940, y: 520 });
-    }
-    // only run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleAreaCaptureComplete = useCallback(
     async (rect: { left: number; top: number; width: number; height: number }) => {
