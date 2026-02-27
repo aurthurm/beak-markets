@@ -25,28 +25,56 @@ import type {
 import type { MarketDataset } from '../../types';
 import {
   DEFAULT_FIB_LEVELS,
-  computeIndicatorData,
   computeBBValues,
-  computeBottomPanelData,
   computeFractals,
   computeKangarooTails,
   computeEngulfingCandles,
   computeInsideBars,
   computeOpenLines,
   computeZigZag,
-  indicatorLabel,
   createFractalsPlugin,
   createKangarooTailPlugin,
   createEngulfingPlugin,
   createInsideBarPlugin,
   createOpenLinesPlugin,
   createZigZagPlugin,
+  type IndicatorComputeContext,
+  getAllIndicators,
+  getIndicator,
+  loadCustomIndicators
 } from '@beak/charts';
 import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { DrawingToolbar, type NavigationTool } from './DrawingToolbar';
 import { FibLevelEditor } from './FibLevelEditor';
 import IndicatorPanel, { type IndicatorPanelHandle } from './IndicatorPanel';
+
+export function indicatorLabel(
+  indicator: Pick<IndicatorConfig, 'type' | 'period' | 'id'> & Record<string, any>,
+): string {
+  if (indicator.type === 'volume') return 'Volume';
+  if (indicator.type === 'fractals') return 'Fractals';
+  if (indicator.type === 'kangarooTail') return 'Kangaroo Tail';
+  if (indicator.type === 'zigzag') return `ZigZag ${indicator.period}%`;
+  if (indicator.type === 'engulfing') return 'Engulfing Candle';
+  if (indicator.type === 'insideBar') return 'Inside Bar';
+  if (indicator.type === 'openLines') return 'Open Lines';
+
+  const def = getIndicator(indicator.type);
+  if (def && def.name) {
+    // Basic short name if no specific formatting
+    const short = def.id.toUpperCase();
+    if (indicator.type === 'macd') {
+      return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
+    }
+    if (indicator.type === 'bb') return `BB ${indicator.period} (${indicator.bbStdDev ?? 2})`;
+    if (indicator.type === 'sma' || indicator.type === 'ema' || indicator.type === 'rsi' || indicator.type === 'atr' || indicator.type === 'zigzag') {
+      return `${short} ${indicator.period}`;
+    }
+    return def.name;
+  }
+  return indicator.type.toUpperCase();
+}
 
 // ── Widget-local types ────────────────────────────────────────────────────────
 
@@ -68,12 +96,12 @@ const CHART_TYPE_OPTIONS: { value: ChartType; label: string }[] = [
 const INDICATOR_CATALOG: {
   key: string;
   label: string;
-  type?: IndicatorType;
+  type?: string;
   color?: string;
   placement?: IndicatorPlacement;
   enabled: boolean;
 }[] = [
-    { key: 'volume', label: 'Volume', type: 'volume', color: '#10b981', placement: 'overlay', enabled: true },
+    { key: 'volume_default', label: 'Volume', type: 'volume', color: '#10b981', placement: 'overlay', enabled: true },
     { key: 'sma', label: 'Simple Moving Average (SMA)', type: 'sma', color: '#22d3ee', placement: 'overlay', enabled: true },
     { key: 'ema', label: 'Exponential Moving Average (EMA)', type: 'ema', color: '#f59e0b', placement: 'overlay', enabled: true },
     { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
@@ -177,6 +205,11 @@ export default function BeakChartWidget({ ticker }: Props) {
   const [indicatorsModalOpen, setIndicatorsModalOpen] = useState(false);
   const [indicatorsTab, setIndicatorsTab] = useState<IndicatorsTab>('indicators');
   const [favoriteIndicatorKeys, setFavoriteIndicatorKeys] = useState<string[]>(['sma']);
+  const [customIndicatorsLoaded, setCustomIndicatorsLoaded] = useState(false);
+
+  useEffect(() => {
+    loadCustomIndicators().then(() => setCustomIndicatorsLoaded(true));
+  }, []);
 
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [settingsIndicatorId, setSettingsIndicatorId] = useState<string | null>(null);
@@ -231,11 +264,30 @@ export default function BeakChartWidget({ ticker }: Props) {
 
   const indicatorDataMap = useMemo(() => {
     const m = new Map<string, LineDataPoint[]>();
+    if (!customIndicatorsLoaded) return m;
+
     for (const indicator of indicators) {
-      m.set(indicator.id, computeIndicatorData(priceData, indicator));
+      if (indicator.type === 'volume') {
+        m.set(indicator.id, priceData.map((p) => ({ time: p.time, value: p.volume ?? null })));
+        continue;
+      }
+      if (indicator.type === 'fractals' || indicator.type === 'kangarooTail' || indicator.type === 'zigzag' || indicator.type === 'engulfing' || indicator.type === 'insideBar' || indicator.type === 'openLines') {
+        m.set(indicator.id, priceData.map((p) => ({ time: p.time, value: null })));
+        continue;
+      }
+
+      const def = getIndicator(indicator.type);
+      if (def?.computeOverlay) {
+        const ctx: IndicatorComputeContext = { placement: 'overlay', instanceId: indicator.id };
+        // Pass original visiblePrices for full OHLCVLike structure
+        m.set(indicator.id, def.computeOverlay(visiblePrices, indicator, ctx));
+      } else {
+        // Fallback for missing defs
+        m.set(indicator.id, priceData.map((p) => ({ time: p.time, value: null })));
+      }
     }
     return m;
-  }, [priceData, indicators]);
+  }, [priceData, visiblePrices, indicators, customIndicatorsLoaded]);
 
   const bbBandDataMap = useMemo(() => {
     const m = new Map<string, { upper: LineDataPoint[]; lower: LineDataPoint[] }>();
@@ -249,12 +301,21 @@ export default function BeakChartWidget({ ticker }: Props) {
 
   const bottomPanelDataMap = useMemo(() => {
     const m = new Map<string, BottomIndicatorData>();
+    if (!customIndicatorsLoaded) return m;
+
     for (const indicator of indicators) {
       if (indicator.placement !== 'bottom') continue;
-      m.set(indicator.id, computeBottomPanelData(priceData, indicator));
+
+      const def = getIndicator(indicator.type);
+      if (def?.computeBottom) {
+        const ctx: IndicatorComputeContext = { placement: 'bottom', instanceId: indicator.id };
+        m.set(indicator.id, def.computeBottom(visiblePrices, indicator, ctx));
+      } else {
+        m.set(indicator.id, { lines: [] });
+      }
     }
     return m;
-  }, [priceData, indicators]);
+  }, [priceData, visiblePrices, indicators, customIndicatorsLoaded]);
 
   const bottomIndicators = useMemo(
     () => indicators.filter((i) => i.placement === 'bottom'),
@@ -667,7 +728,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   }, [selectedDrawingId]);
 
   const addIndicatorFromCatalog = useCallback((entry: {
-    type: IndicatorType; color: string; placement: IndicatorPlacement;
+    type: string; color: string; placement: IndicatorPlacement;
   }) => {
     const id = `${entry.type}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const defaults: Record<string, Partial<IndicatorConfig>> = {
@@ -695,7 +756,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       ...prev,
       {
         id,
-        type: entry.type,
+        type: entry.type as any, // Cast to any to bypass strict IndicatorType for now
         placement: entry.placement,
         period: d.period ?? 9,
         color: entry.color,
@@ -1028,44 +1089,65 @@ export default function BeakChartWidget({ ticker }: Props) {
                       )}
                     </div>
 
-                    {INDICATOR_CATALOG.map((entry) => (
-                      <div
-                        key={entry.key}
-                        className={`rounded-md border px-2 py-1.5 flex items-center gap-2 ${entry.enabled ? 'border-slate-700/70 bg-slate-800/70' : 'border-slate-800 bg-slate-900'}`}
-                      >
-                        <button
-                          onClick={() => toggleFavoriteIndicator(entry.key)}
-                          className={`${favoriteIndicatorKeys.includes(entry.key) ? 'text-amber-300' : 'text-slate-500 hover:text-slate-300'}`}
-                          title="Toggle favourite"
+                    {(() => {
+                      const baseCatalog = [...INDICATOR_CATALOG];
+
+                      // Add dynamically discovered custom indicators
+                      if (customIndicatorsLoaded) {
+                        const registryIndicators = getAllIndicators();
+                        for (const def of registryIndicators) {
+                          if (!baseCatalog.some(e => e.type === def.id)) {
+                            baseCatalog.push({
+                              key: def.id,
+                              label: def.name,
+                              type: def.id as any,
+                              placement: def.placement,
+                              enabled: true,
+                              color: def.defaultParams?.color as string ?? '#22d3ee'
+                            });
+                          }
+                        }
+                      }
+
+                      return baseCatalog.map((entry) => (
+                        <div
+                          key={entry.key}
+                          className={`rounded-md border px-2 py-1.5 flex items-center gap-2 ${entry.enabled ? 'border-slate-700/70 bg-slate-800/70' : 'border-slate-800 bg-slate-900'}`}
                         >
-                          {favoriteIndicatorKeys.includes(entry.key) ? '★' : '☆'}
-                        </button>
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-xs truncate ${entry.enabled ? 'text-slate-200' : 'text-slate-500'}`}>{entry.label}</div>
-                          <div className="text-[10px] text-slate-500">
-                            {!entry.enabled
-                              ? 'Not available yet'
-                              : entry.key === 'volume'
-                                ? 'Overlay on main chart'
-                                : entry.key === 'fractals'
-                                  ? '5-bar Williams Fractal pattern'
-                                  : entry.placement === 'bottom'
-                                    ? 'Bottom panel indicator'
-                                    : 'Default rolling window: 9'}
+                          <button
+                            onClick={() => toggleFavoriteIndicator(entry.key)}
+                            className={`${favoriteIndicatorKeys.includes(entry.key) ? 'text-amber-300' : 'text-slate-500 hover:text-slate-300'}`}
+                            title="Toggle favourite"
+                          >
+                            {favoriteIndicatorKeys.includes(entry.key) ? '★' : '☆'}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-xs truncate ${entry.enabled ? 'text-slate-200' : 'text-slate-500'}`}>{entry.label}</div>
+                            <div className="text-[10px] text-slate-500">
+                              {!entry.enabled
+                                ? 'Not available yet'
+                                : entry.key === 'volume'
+                                  ? 'Overlay on main chart'
+                                  : entry.key === 'fractals'
+                                    ? '5-bar Williams Fractal pattern'
+                                    : entry.placement === 'bottom'
+                                      ? 'Bottom panel indicator'
+                                      : 'Overlay indicator'}
+                            </div>
                           </div>
+                          <button
+                            disabled={!entry.enabled}
+                            onClick={() => {
+                              if (!entry.type || !entry.color || !entry.placement) return;
+                              addIndicatorFromCatalog({ type: entry.type, color: entry.color, placement: entry.placement });
+                            }}
+                            className={`h-7 px-2 rounded text-[11px] ${entry.enabled ? 'text-cyan-200 bg-cyan-600/20 hover:bg-cyan-600/30' : 'text-slate-500 bg-slate-900 cursor-not-allowed'}`}
+                          >
+                            Add
+                          </button>
                         </div>
-                        <button
-                          disabled={!entry.enabled}
-                          onClick={() => {
-                            if (!entry.type || !entry.color || !entry.placement) return;
-                            addIndicatorFromCatalog({ type: entry.type, color: entry.color, placement: entry.placement });
-                          }}
-                          className={`h-7 px-2 rounded text-[11px] ${entry.enabled ? 'text-cyan-200 bg-cyan-600/20 hover:bg-cyan-600/30' : 'text-slate-500 bg-slate-900 cursor-not-allowed'}`}
-                        >
-                          Add
-                        </button>
-                      </div>
-                    ))}
+                      ));
+                    })()}
                   </div>
                 )}
 

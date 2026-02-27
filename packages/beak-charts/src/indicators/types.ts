@@ -1,3 +1,5 @@
+import type { LineDataPoint } from '../types.ts';
+
 // ── Indicator Configuration ──────────────────────────────────────────────────
 
 export type IndicatorType =
@@ -17,7 +19,7 @@ export type IndicatorType =
   | 'openLines';
 
 export type IndicatorSource = 'close' | 'open' | 'high' | 'low' | 'median';
-export type IndicatorStyle  = 'solid' | 'dashed' | 'dotted';
+export type IndicatorStyle = 'solid' | 'dashed' | 'dotted';
 export type IndicatorPlacement = 'overlay' | 'bottom';
 
 export type IndicatorConfig = {
@@ -148,4 +150,68 @@ export type PriceBar = {
   low: number;
   close: number;
   volume?: number;
+};
+
+export type OHLCVLike = {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+};
+
+export type ChartEventType = 'onDataUpdate' | 'onVisibleRangeChange';
+export type ChartEventPayload = Record<string, unknown>;
+
+export type InitResult = { ok: true } | { ok: false; message: string };
+export type DeinitReason =
+  | 'removed'
+  | 'chart_closed'
+  | 'parameters_changed'
+  | 'symbol_or_timeframe_changed'
+  | 'replaced'
+  | 'init_failed';
+
+export type ParamSpec = {
+  key: string;
+  label: string;
+  type: 'number' | 'string' | 'boolean' | 'color';
+  default: any;
+  min?: number;
+  max?: number;
+  options?: string[];
+};
+
+export type IndicatorComputeContext = {
+  placement: IndicatorPlacement;
+  instanceId: string;
+  chartInstanceId?: string;
+};
+
+export type IndicatorInstanceContext = {
+  placement: IndicatorPlacement;
+  instanceId: string;
+  chartInstanceId?: string;
+  params: Record<string, unknown>;
+  subscribe(event: ChartEventType, handler: (payload: ChartEventPayload) => void): () => void;
+  getSourcePrices(): OHLCVLike[];
+  getBarCount(): number;
+  getVisibleRange(): { startIndex: number; endIndex: number; totalBars: number } | null;
+  getCrosshair(): { barIndex: number; price: number; time: number } | null;
+  requestDraw(): void;
+};
+
+export type IndicatorDefinition = {
+  id: string;
+  name: string;
+  placement: IndicatorPlacement;
+  defaultParams?: Record<string, unknown>;
+  paramSchema?: ParamSpec[];
+  onInit?(context: IndicatorInstanceContext): InitResult;
+  onRegistered?(context: IndicatorInstanceContext): void;
+  onUnregistered?(context: IndicatorInstanceContext, reason: DeinitReason): void;
+  onCleanup?(): void;
+  computeOverlay?(prices: OHLCVLike[], params: Record<string, unknown>, ctx: IndicatorComputeContext): LineDataPoint[];
+  computeBottom?(prices: OHLCVLike[], params: Record<string, unknown>, ctx: IndicatorComputeContext): BottomIndicatorData;
 };

@@ -18,22 +18,16 @@ export default function ValuationWidget({ ticker }: Props) {
     return () => { active = false; };
   }, [ticker]);
 
-  if (!dataset) {
-    return <div className="flex h-full items-center justify-center text-xs text-gray-500">Loading data...</div>;
-  }
-
-  const fin = dataset.financials;
-  const currentPrice = dataset.prices[currentIndex]?.close ?? 0;
-
   const [base, quote] = ticker.includes('/') ? ticker.split('/') : [ticker, ''];
 
-  // Forex-relevant metrics: rate diff, GDP diff, CPI diff, trade balance
-  const baseRate = fin.eps[fin.eps.length - 1] ?? 3.0;
-  const quoteRate = fin.eps[fin.eps.length - 2] ?? 2.5;
-  const rateDiff = +(baseRate - quoteRate).toFixed(2);
+  const metrics = useMemo(() => {
+    if (!dataset?.financials) return [];
+    const fin = dataset.financials;
+    const baseRate = fin.eps[fin.eps.length - 1] ?? 3.0;
+    const quoteRate = fin.eps[fin.eps.length - 2] ?? 2.5;
+    const rateDiff = +(baseRate - quoteRate).toFixed(2);
 
-  const metrics = useMemo(
-    () => [
+    return [
       {
         label: 'Rate Differential',
         value: `${rateDiff > 0 ? '+' : ''}${rateDiff}%`,
@@ -66,9 +60,19 @@ export default function ValuationWidget({ ticker }: Props) {
         rating: fin.pegRatio > 0 ? 'Surplus' : 'Deficit',
         color: fin.pegRatio > 0 ? 'text-emerald-400' : 'text-red-400',
       },
-    ],
-    [fin, base, quote, baseRate, quoteRate, rateDiff]
-  );
+    ];
+  }, [dataset?.financials, base, quote]);
+
+  if (!dataset) {
+    return <div className="flex h-full items-center justify-center text-xs text-gray-500">Loading data...</div>;
+  }
+
+  const fin = dataset.financials;
+  const currentPrice = dataset.prices[currentIndex]?.close ?? 0;
+
+  const baseRate = fin.eps[fin.eps.length - 1] ?? 3.0;
+  const quoteRate = fin.eps[fin.eps.length - 2] ?? 2.5;
+  const rateDiff = +(baseRate - quoteRate).toFixed(2);
 
   // Pip calculation
   const isJpy = ticker.includes('JPY');

@@ -66,6 +66,14 @@ export {
   indicatorLabel,
 } from './indicators/compute.ts';
 
+export { builtinIndicators } from './indicators/builtin/index.ts';
+export {
+  registerIndicator,
+  getAllIndicators,
+  getIndicator,
+  loadCustomIndicators,
+} from './indicators/registry.ts';
+
 // Indicators — fractal plugin
 export { createFractalsPlugin } from './indicators/FractalsPlugin.ts';
 
@@ -105,6 +113,18 @@ export type {
   ZigZagPoint,
   ZigZagData,
   PriceBar,
+} from './indicators/types.ts';
+
+export type {
+  IndicatorDefinition,
+  IndicatorComputeContext,
+  IndicatorInstanceContext,
+  InitResult,
+  DeinitReason,
+  ParamSpec,
+  ChartEventType,
+  ChartEventPayload,
+  OHLCVLike,
 } from './indicators/types.ts';
 
 // Types
