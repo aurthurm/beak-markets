@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { marketService } from '../../services/marketService';
 import { formatDate } from '../../utils/format';
-import type { NewsItem } from '../../types';
+import type { NewsItem, MarketDataset } from '../../types';
 
 type Props = { ticker: string };
 
@@ -18,20 +18,31 @@ const IMPACT_STYLES = {
 };
 
 export default function NewsWidget({ ticker }: Props) {
-  const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
+  const [dataset, setDataset] = useState<MarketDataset | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | NewsItem['sentiment']>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  useEffect(() => {
+    let active = true;
+    marketService.getDataset(ticker).then((ds) => {
+      if (active) setDataset(ds);
+    }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
+    return () => { active = false; };
+  }, [ticker]);
+
   const news = useMemo(() => {
+    if (!dataset) return [];
     if (filter === 'all') return dataset.news;
     return dataset.news.filter((n) => n.sentiment === filter);
-  }, [dataset.news, filter]);
+  }, [dataset, filter]);
 
   const sentimentCounts = useMemo(() => {
     const counts = { bullish: 0, bearish: 0, neutral: 0 };
+    if (!dataset) return counts;
     dataset.news.forEach((n) => counts[n.sentiment]++);
     return counts;
-  }, [dataset.news]);
+  }, [dataset]);
 
   const timeAgo = (timestamp: number) => {
     const diff = Date.now() - timestamp;
@@ -44,6 +55,21 @@ export default function NewsWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-2.5">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
+      {(!dataset) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 backdrop-blur-sm rounded-lg">
+          <span className="text-xs text-gray-400">Loading news...</span>
+        </div>
+      )}
       {/* Header bar with sentiment summary */}
       <div className="nodrag flex items-center gap-2">
         <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 rounded border border-emerald-500/20">
@@ -66,11 +92,10 @@ export default function NewsWidget({ ticker }: Props) {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-2 py-0.5 text-[10px] font-mono rounded border capitalize ${
-              filter === f
+            className={`px-2 py-0.5 text-[10px] font-mono rounded border capitalize ${filter === f
                 ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10'
                 : 'border-gray-700 text-gray-500 hover:text-gray-300'
-            }`}
+              }`}
           >
             {f}
           </button>

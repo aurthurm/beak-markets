@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { marketService } from '../../services/marketService';
 import { aiService } from '../../services/aiService';
 import AISettingsModal from './AISettingsModal';
+import type { MarketDataset } from '../../types';
 
 type Props = { ticker: string };
 
@@ -24,16 +25,30 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function AINewsWidget({ ticker }: Props) {
   const [activeTab, setActiveTab] = useState<'summary' | 'research'>('summary');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dataset, setDataset] = useState<MarketDataset | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
-  const summary = useMemo(
-    () => aiService.getNewsSummary(ticker, dataset.news, dataset.sentiment),
-    [ticker, dataset.news, dataset.sentiment]
-  );
-  const research = useMemo(
-    () => aiService.getResearchReport(ticker, dataset.news, dataset.sentiment),
-    [ticker, dataset.news, dataset.sentiment]
-  );
+  useEffect(() => {
+    let active = true;
+    marketService.getDataset(ticker).then((ds) => {
+      if (active) setDataset(ds);
+    }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
+    return () => { active = false; };
+  }, [ticker]);
+
+  const summary = useMemo(() => {
+    if (!dataset) return null;
+    return aiService.getNewsSummary(ticker, dataset.news, dataset.sentiment);
+  }, [ticker, dataset]);
+
+  const research = useMemo(() => {
+    if (!dataset) return null;
+    return aiService.getResearchReport(ticker, dataset.news, dataset.sentiment);
+  }, [ticker, dataset]);
+
+  if (!dataset || !summary || !research) {
+    return <div className="flex h-full items-center justify-center text-xs text-gray-500">Processing AI insights...</div>;
+  }
 
   const biasColor =
     summary.sentimentBias === 'bullish'
@@ -44,6 +59,16 @@ export default function AINewsWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-3">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
       {/* AI badge + settings */}
       <div className="nodrag flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gradient-to-r from-violet-500/20 to-cyan-500/20 border border-violet-500/30">
@@ -78,21 +103,19 @@ export default function AINewsWidget({ ticker }: Props) {
       <div className="nodrag flex gap-1">
         <button
           onClick={() => setActiveTab('summary')}
-          className={`px-3 py-1.5 text-[11px] font-medium rounded-lg border transition-colors ${
-            activeTab === 'summary'
+          className={`px-3 py-1.5 text-[11px] font-medium rounded-lg border transition-colors ${activeTab === 'summary'
               ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10'
               : 'border-gray-700 text-gray-500 hover:text-gray-300'
-          }`}
+            }`}
         >
           News Summary
         </button>
         <button
           onClick={() => setActiveTab('research')}
-          className={`px-3 py-1.5 text-[11px] font-medium rounded-lg border transition-colors ${
-            activeTab === 'research'
+          className={`px-3 py-1.5 text-[11px] font-medium rounded-lg border transition-colors ${activeTab === 'research'
               ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10'
               : 'border-gray-700 text-gray-500 hover:text-gray-300'
-          }`}
+            }`}
         >
           Research
         </button>

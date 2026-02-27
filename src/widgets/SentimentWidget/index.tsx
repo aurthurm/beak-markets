@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { marketService } from '../../services/marketService';
 import { formatDate } from '../../utils/format';
+import type { MarketDataset } from '../../types';
 
 type Props = { ticker: string };
 
@@ -12,20 +13,30 @@ const DIRECTION_STYLES = {
 };
 
 export default function SentimentWidget({ ticker }: Props) {
-  const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
-  const sentiment = dataset.sentiment;
+  const [dataset, setDataset] = useState<MarketDataset | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const overallLabel = sentiment.overall > 20 ? 'Bullish' : sentiment.overall < -20 ? 'Bearish' : 'Neutral';
-  const overallColor = sentiment.overall > 20 ? 'text-emerald-400' : sentiment.overall < -20 ? 'text-red-400' : 'text-gray-400';
+  useEffect(() => {
+    let active = true;
+    marketService.getDataset(ticker).then((ds) => {
+      if (active) setDataset(ds);
+    }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
+    return () => { active = false; };
+  }, [ticker]);
+
+  const sentiment = dataset?.sentiment;
+
+  const overallLabel = !sentiment ? 'Neutral' : sentiment.overall > 20 ? 'Bullish' : sentiment.overall < -20 ? 'Bearish' : 'Neutral';
+  const overallColor = !sentiment ? 'text-gray-400' : sentiment.overall > 20 ? 'text-emerald-400' : sentiment.overall < -20 ? 'text-red-400' : 'text-gray-400';
 
   const historyData = useMemo(
-    () => sentiment.history.map((h) => ({ date: formatDate(h.timestamp), value: h.value })),
-    [sentiment.history]
+    () => sentiment?.history.map((h) => ({ date: formatDate(h.timestamp), value: h.value })) ?? [],
+    [sentiment?.history]
   );
 
-  const lineColor = sentiment.overall >= 0 ? '#10b981' : '#ef4444';
-  const fillColorStart = sentiment.overall >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)';
-  const fillColorEnd = sentiment.overall >= 0 ? 'rgba(16,185,129,0)' : 'rgba(239,68,68,0)';
+  const lineColor = !sentiment ? '#9ca3af' : sentiment.overall >= 0 ? '#10b981' : '#ef4444';
+  const fillColorStart = !sentiment ? 'transparent' : sentiment.overall >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)';
+  const fillColorEnd = !sentiment ? 'transparent' : sentiment.overall >= 0 ? 'rgba(16,185,129,0)' : 'rgba(239,68,68,0)';
 
   const option = useMemo(() => ({
     backgroundColor: 'transparent',
@@ -85,12 +96,27 @@ export default function SentimentWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-3">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
+      {(!dataset || !sentiment) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 backdrop-blur-sm rounded-lg">
+          <span className="text-xs text-gray-400">Loading sentiment...</span>
+        </div>
+      )}
       {/* Overall gauge */}
       <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/30">
         <div className="flex items-center justify-between mb-2">
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">Overall Sentiment</span>
           <span className={`text-sm font-bold font-mono ${overallColor}`}>
-            {overallLabel} ({sentiment.overall > 0 ? '+' : ''}{sentiment.overall})
+            {overallLabel} ({sentiment?.overall ? (sentiment.overall > 0 ? '+' : '') + sentiment.overall : 0})
           </span>
         </div>
         {/* Gauge bar */}
@@ -102,7 +128,7 @@ export default function SentimentWidget({ ticker }: Props) {
           {/* Needle */}
           <div
             className="absolute top-0 w-0.5 h-full bg-white shadow-lg shadow-white/50"
-            style={{ left: `${((sentiment.overall + 100) / 200) * 100}%` }}
+            style={{ left: `${(((sentiment?.overall ?? 0) + 100) / 200) * 100}%` }}
           />
         </div>
         <div className="flex justify-between mt-1">
@@ -115,7 +141,7 @@ export default function SentimentWidget({ ticker }: Props) {
       {/* Breakdown bars */}
       <div className="space-y-1.5">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider">Breakdown</div>
-        {sentiment.breakdown.map((b) => (
+        {sentiment?.breakdown.map((b) => (
           <div key={b.label} className="flex items-center gap-2">
             <span className="text-[10px] text-gray-400 w-20 shrink-0 truncate">{b.label}</span>
             <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden relative">
@@ -145,7 +171,7 @@ export default function SentimentWidget({ ticker }: Props) {
       <div className="space-y-1">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider">Signals</div>
         <div className="grid grid-cols-2 gap-1">
-          {sentiment.signals.map((s) => {
+          {sentiment?.signals.map((s) => {
             const style = DIRECTION_STYLES[s.direction];
             return (
               <div key={s.label} className={`rounded px-2 py-1.5 ${style.bg} border border-gray-700/20`}>

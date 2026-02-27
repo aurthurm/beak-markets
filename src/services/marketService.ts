@@ -1,30 +1,61 @@
-import { getMarketDataset, getAllStocks } from '../mock-data/generators';
-import type { MarketDataset } from '../types';
+import type { MarketDataset, PriceBar } from '../types';
+
+const API_BASE_URL = 'http://127.0.0.1:8001/api';
 
 const cache = new Map<string, MarketDataset>();
 
+const HARDCODED_PAIRS = [
+  { ticker: 'EUR/USD', name: 'Euro / US Dollar', pipSize: 0.0001 },
+  { ticker: 'GBP/USD', name: 'British Pound / US Dollar', pipSize: 0.0001 },
+  { ticker: 'USD/JPY', name: 'US Dollar / Japanese Yen', pipSize: 0.01 },
+  { ticker: 'USD/CHF', name: 'US Dollar / Swiss Franc', pipSize: 0.0001 },
+  { ticker: 'AUD/USD', name: 'Australian Dollar / US Dollar', pipSize: 0.0001 },
+  { ticker: 'USD/CAD', name: 'US Dollar / Canadian Dollar', pipSize: 0.0001 },
+  { ticker: 'NZD/USD', name: 'New Zealand Dollar / US Dollar', pipSize: 0.0001 },
+  { ticker: 'EUR/GBP', name: 'Euro / British Pound', pipSize: 0.0001 },
+  { ticker: 'EUR/JPY', name: 'Euro / Japanese Yen', pipSize: 0.01 },
+  { ticker: 'GBP/JPY', name: 'British Pound / Japanese Yen', pipSize: 0.01 },
+  { ticker: 'AUD/JPY', name: 'Australian Dollar / Japanese Yen', pipSize: 0.01 },
+  { ticker: 'EUR/CHF', name: 'Euro / Swiss Franc', pipSize: 0.0001 },
+  { ticker: 'XAU/USD', name: 'Gold / US Dollar', pipSize: 0.1 },
+  { ticker: 'DXY', name: 'US Dollar Index', pipSize: 0.01 },
+];
+
 export const marketService = {
-  getDataset(ticker: string): MarketDataset {
-    if (!cache.has(ticker)) {
-      cache.set(ticker, getMarketDataset(ticker));
+  async getDataset(ticker: string, forceRefetch = false): Promise<MarketDataset> {
+    if (!forceRefetch && cache.has(ticker)) {
+      return cache.get(ticker)!;
     }
-    return cache.get(ticker)!;
+
+    const res = await fetch(`${API_BASE_URL}/market/dataset?ticker=${encodeURIComponent(ticker)}&days=252`);
+    if (!res.ok) {
+      let errStr = `Failed to fetch data for ${ticker}`;
+      try {
+        const errData = await res.json();
+        if (errData.detail) errStr = errData.detail;
+      } catch { }
+      throw new Error(errStr);
+    }
+
+    const dataset: MarketDataset = await res.json();
+    dataset.prices.sort((a, b) => a.timestamp - b.timestamp);
+    cache.set(ticker, dataset);
+    return dataset;
   },
 
   getAvailableTickers() {
-    return getAllStocks();
+    return HARDCODED_PAIRS;
   },
 
   getTickerDisplayInfo(ticker: string): { pipSize: number; decimals: number } {
-    const pairs = getAllStocks();
-    const pair = pairs.find((p) => p.ticker === ticker);
+    const pair = HARDCODED_PAIRS.find((p) => p.ticker === ticker);
     const pipSize = pair?.pipSize ?? (ticker.includes('JPY') ? 0.01 : 0.0001);
     const decimals = pipSize >= 0.1 ? 2 : pipSize >= 0.01 ? 3 : 5;
     return { pipSize, decimals };
   },
 
-  getLatestPrice(ticker: string, index?: number): number {
-    const ds = this.getDataset(ticker);
+  async getLatestPrice(ticker: string, index?: number): Promise<number> {
+    const ds = await this.getDataset(ticker);
     const idx = index ?? ds.prices.length - 1;
     return ds.prices[idx]?.close ?? 0;
   },

@@ -1,32 +1,60 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { marketService } from '../../services/marketService';
 import { useTickerStore } from '../../store/useTickerStore';
 import { useCanvasStore } from '../../store/useCanvasStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
+import type { MarketDataset } from '../../types';
 
 type Props = { ticker: string; widgetId: string };
+
+type WatchlistItem = {
+  ticker: string;
+  name: string;
+  price: number;
+  change: number;
+  changePips: number;
+  changePct: number;
+  decimals: number;
+};
 
 export default function WatchlistWidget({ widgetId }: Props) {
   const allPairs = useMemo(() => marketService.getAvailableTickers(), []);
   const [watchlist, setWatchlist] = useState<string[]>(allPairs.map((s) => s.ticker));
   const [newTicker, setNewTicker] = useState('');
+  const [data, setData] = useState<WatchlistItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const setGlobalTicker = useTickerStore((s) => s.setGlobalTicker);
   const updateWidgetData = useCanvasStore((s) => s.updateWidgetData);
   const currentIndex = useSimulationStore((s) => s.currentIndex);
 
-  const data = useMemo(() => {
-    return watchlist.map((ticker) => {
-      const ds = marketService.getDataset(ticker);
-      const pair = allPairs.find((s) => s.ticker === ticker);
-      const price = ds.prices[currentIndex]?.close ?? 0;
-      const prevPrice = ds.prices[Math.max(0, currentIndex - 1)]?.close ?? price;
-      const change = price - prevPrice;
-      const pipSize = pair?.pipSize ?? (ticker.includes('JPY') ? 0.01 : 0.0001);
-      const decimals = pipSize >= 0.1 ? 2 : pipSize >= 0.01 ? 3 : 5;
-      const changePips = Math.round(change / pipSize);
-      const changePct = prevPrice ? (change / prevPrice) * 100 : 0;
-      return { ticker, name: pair?.name ?? ticker, price, change, changePips, changePct, decimals };
-    });
+  useEffect(() => {
+    let active = true;
+    const fetchData = async () => {
+      const results: WatchlistItem[] = [];
+      for (const ticker of watchlist) {
+        try {
+          const ds = await marketService.getDataset(ticker);
+          if (!active) return;
+          const pair = allPairs.find((s) => s.ticker === ticker);
+          const price = ds.prices[currentIndex]?.close ?? 0;
+          const prevPrice = ds.prices[Math.max(0, currentIndex - 1)]?.close ?? price;
+          const change = price - prevPrice;
+          const pipSize = pair?.pipSize ?? (ticker.includes('JPY') ? 0.01 : 0.0001);
+          const decimals = pipSize >= 0.1 ? 2 : pipSize >= 0.01 ? 3 : 5;
+          const changePips = Math.round(change / pipSize);
+          const changePct = prevPrice ? (change / prevPrice) * 100 : 0;
+          results.push({ ticker, name: pair?.name ?? ticker, price, change, changePips, changePct, decimals });
+        } catch (e: any) {
+          console.error('Failed to fetch for', ticker);
+          if (active) setError(e.message || 'Failed to fetch Watchlist data');
+        }
+      }
+      if (active) {
+        setData(results);
+      }
+    };
+    fetchData();
+    return () => { active = false; };
   }, [watchlist, currentIndex, allPairs]);
 
   const handleSelect = (ticker: string) => {
@@ -43,7 +71,17 @@ export default function WatchlistWidget({ widgetId }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full gap-2">
+    <div className="flex flex-col h-full gap-2 relative">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
       {/* Add pair */}
       <div className="nodrag flex gap-1">
         <input

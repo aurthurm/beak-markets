@@ -17,6 +17,7 @@ import {
 import { marketService } from '../../services/marketService';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { formatCurrency } from '../../utils/format';
+import type { MarketDataset } from '../../types';
 
 type Props = { ticker: string };
 type Indicator = 'sma20' | 'sma50' | 'ema12' | 'rsi';
@@ -24,6 +25,8 @@ type Indicator = 'sma20' | 'sma50' | 'ema12' | 'rsi';
 export default function ChartWidget({ ticker }: Props) {
   const currentIndex = useSimulationStore((s) => s.currentIndex);
   const [activeIndicators, setActiveIndicators] = useState<Set<Indicator>>(new Set(['sma20']));
+  const [dataset, setDataset] = useState<MarketDataset | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -31,13 +34,20 @@ export default function ChartWidget({ ticker }: Props) {
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
 
-  const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
-  const visiblePrices = useMemo(() => dataset.prices.slice(0, currentIndex + 1), [dataset, currentIndex]);
+  useEffect(() => {
+    let active = true;
+    marketService.getDataset(ticker).then((ds) => {
+      if (active) setDataset(ds);
+    }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
+    return () => { active = false; };
+  }, [ticker]);
+
+  const visiblePrices = useMemo(() => dataset ? dataset.prices.slice(0, currentIndex + 1) : [], [dataset, currentIndex]);
   const closes = useMemo(() => visiblePrices.map((p) => p.close), [visiblePrices]);
 
   const lastBar = visiblePrices[visiblePrices.length - 1];
   const prevBar = visiblePrices.length > 1 ? visiblePrices[visiblePrices.length - 2] : lastBar;
-  const change = lastBar ? lastBar.close - prevBar.close : 0;
+  const change = lastBar ? lastBar.close - (prevBar?.close ?? lastBar.close) : 0;
   const changePct = prevBar ? (change / prevBar.close) * 100 : 0;
   const { pipSize, decimals } = marketService.getTickerDisplayInfo(ticker);
   const changePips = Math.round(change / pipSize);
@@ -109,7 +119,7 @@ export default function ChartWidget({ ticker }: Props) {
     return () => {
       resizeObserver.disconnect();
       indicatorSeriesRef.current.forEach((series) => {
-        try { chart.removeSeries(series); } catch {}
+        try { chart.removeSeries(series); } catch { }
       });
       indicatorSeriesRef.current.clear();
       chart.remove();
@@ -156,7 +166,7 @@ export default function ChartWidget({ ticker }: Props) {
     // Remove indicators that are no longer active
     indicatorSeriesRef.current.forEach((series, key) => {
       if (!activeIndicators.has(key as Indicator)) {
-        try { chart.removeSeries(series); } catch {}
+        try { chart.removeSeries(series); } catch { }
         indicatorSeriesRef.current.delete(key);
       }
     });
@@ -213,6 +223,16 @@ export default function ChartWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-2">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
       {/* Price header */}
       <div className="flex items-baseline gap-3">
         <span className="text-lg font-bold text-white font-mono">
@@ -229,11 +249,10 @@ export default function ChartWidget({ ticker }: Props) {
           <button
             key={ind}
             onClick={() => toggleIndicator(ind)}
-            className={`px-2 py-0.5 text-[10px] font-mono rounded border ${
-              activeIndicators.has(ind)
+            className={`px-2 py-0.5 text-[10px] font-mono rounded border ${activeIndicators.has(ind)
                 ? 'border-cyan-500/50 text-cyan-400 bg-cyan-500/10'
                 : 'border-gray-700 text-gray-500 hover:text-gray-300'
-            }`}
+              }`}
           >
             {ind.toUpperCase()}
           </button>

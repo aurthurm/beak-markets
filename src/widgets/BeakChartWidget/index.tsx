@@ -22,6 +22,7 @@ import type {
   ZigZagData,
   PriceBar,
 } from '@beak/charts';
+import type { MarketDataset } from '../../types';
 import {
   DEFAULT_FIB_LEVELS,
   computeIndicatorData,
@@ -60,8 +61,8 @@ const WEEKLY_TIMEFRAMES: Timeframe[] = ['W', '2W', '1M'];
 
 const CHART_TYPE_OPTIONS: { value: ChartType; label: string }[] = [
   { value: 'candlestick', label: 'Candlestick' },
-  { value: 'bar',         label: 'Bar' },
-  { value: 'line',        label: 'Line' },
+  { value: 'bar', label: 'Bar' },
+  { value: 'line', label: 'Line' },
 ];
 
 const INDICATOR_CATALOG: {
@@ -72,17 +73,17 @@ const INDICATOR_CATALOG: {
   placement?: IndicatorPlacement;
   enabled: boolean;
 }[] = [
-  { key: 'volume',   label: 'Volume',                         type: 'volume',   color: '#10b981', placement: 'overlay', enabled: true  },
-  { key: 'sma',      label: 'Simple Moving Average (SMA)',    type: 'sma',      color: '#22d3ee', placement: 'overlay', enabled: true  },
-  { key: 'ema',      label: 'Exponential Moving Average (EMA)', type: 'ema',    color: '#f59e0b', placement: 'overlay', enabled: true  },
-  { key: 'ao',       label: 'Awesome Oscillator',             type: 'ao',       color: '#a78bfa', placement: 'bottom',  enabled: true  },
-  { key: 'rsi',      label: 'Relative Strength Index (RSI)',  type: 'rsi',      color: '#a855f7', placement: 'bottom',  enabled: true  },
-  { key: 'macd',     label: 'MACD',                           type: 'macd',     color: '#06b6d4', placement: 'bottom',  enabled: true  },
-  { key: 'atr',      label: 'Average True Range (ATR)',       type: 'atr',      color: '#e879f9', placement: 'bottom',  enabled: true  },
-  { key: 'bb',       label: 'Bollinger Bands (BB)',           type: 'bb',       color: '#38bdf8', placement: 'overlay', enabled: true  },
-  { key: 'fractals', label: 'Williams Fractals',              type: 'fractals', color: '#f59e0b', placement: 'overlay', enabled: true  },
-  { key: 'zigzag',   label: 'ZigZag',                        type: 'zigzag',   color: '#94a3b8', placement: 'overlay', enabled: true  },
-];
+    { key: 'volume', label: 'Volume', type: 'volume', color: '#10b981', placement: 'overlay', enabled: true },
+    { key: 'sma', label: 'Simple Moving Average (SMA)', type: 'sma', color: '#22d3ee', placement: 'overlay', enabled: true },
+    { key: 'ema', label: 'Exponential Moving Average (EMA)', type: 'ema', color: '#f59e0b', placement: 'overlay', enabled: true },
+    { key: 'ao', label: 'Awesome Oscillator', type: 'ao', color: '#a78bfa', placement: 'bottom', enabled: true },
+    { key: 'rsi', label: 'Relative Strength Index (RSI)', type: 'rsi', color: '#a855f7', placement: 'bottom', enabled: true },
+    { key: 'macd', label: 'MACD', type: 'macd', color: '#06b6d4', placement: 'bottom', enabled: true },
+    { key: 'atr', label: 'Average True Range (ATR)', type: 'atr', color: '#e879f9', placement: 'bottom', enabled: true },
+    { key: 'bb', label: 'Bollinger Bands (BB)', type: 'bb', color: '#38bdf8', placement: 'overlay', enabled: true },
+    { key: 'fractals', label: 'Williams Fractals', type: 'fractals', color: '#f59e0b', placement: 'overlay', enabled: true },
+    { key: 'zigzag', label: 'ZigZag', type: 'zigzag', color: '#94a3b8', placement: 'overlay', enabled: true },
+  ];
 
 const STRATEGY_CATALOG = ['Mean Reversion', 'Breakout', 'Trend Follow'];
 
@@ -95,75 +96,75 @@ const PATTERN_CATALOG: {
   placement?: IndicatorPlacement;
   enabled: boolean;
 }[] = [
-  {
-    key: 'kangarooTail',
-    label: 'Kangaroo Tail',
-    description: 'Pinbar where body < 30 % of range and sits at one extreme',
-    type: 'kangarooTail',
-    color: '#f59e0b',
-    placement: 'overlay',
-    enabled: true,
-  },
-  {
-    key: 'engulfing',
-    label: 'Engulfing Candle',
-    description: 'Two-candle reversal where current range fully engulfs prior range',
-    type: 'engulfing',
-    color: '#22c55e',
-    placement: 'overlay',
-    enabled: true,
-  },
-  {
-    key: 'insideBar',
-    label: 'Inside Bar',
-    description: 'Consolidation where the prior candle range fully contains the current range',
-    type: 'insideBar',
-    color: '#a78bfa',
-    placement: 'overlay',
-    enabled: true,
-  },
-  {
-    key: 'openLines',
-    label: 'Open Lines',
-    description: 'Daily, weekly and monthly session open price lines',
-    type: 'openLines',
-    color: '#38bdf8',
-    placement: 'overlay',
-    enabled: true,
-  },
-  { key: 'doubleTop',        label: 'Double Top',        description: 'Coming soon', enabled: false },
-  { key: 'headShoulders',    label: 'Head & Shoulders',  description: 'Coming soon', enabled: false },
-  { key: 'triangle',         label: 'Triangle',          description: 'Coming soon', enabled: false },
-];
+    {
+      key: 'kangarooTail',
+      label: 'Kangaroo Tail',
+      description: 'Pinbar where body < 30 % of range and sits at one extreme',
+      type: 'kangarooTail',
+      color: '#f59e0b',
+      placement: 'overlay',
+      enabled: true,
+    },
+    {
+      key: 'engulfing',
+      label: 'Engulfing Candle',
+      description: 'Two-candle reversal where current range fully engulfs prior range',
+      type: 'engulfing',
+      color: '#22c55e',
+      placement: 'overlay',
+      enabled: true,
+    },
+    {
+      key: 'insideBar',
+      label: 'Inside Bar',
+      description: 'Consolidation where the prior candle range fully contains the current range',
+      type: 'insideBar',
+      color: '#a78bfa',
+      placement: 'overlay',
+      enabled: true,
+    },
+    {
+      key: 'openLines',
+      label: 'Open Lines',
+      description: 'Daily, weekly and monthly session open price lines',
+      type: 'openLines',
+      color: '#38bdf8',
+      placement: 'overlay',
+      enabled: true,
+    },
+    { key: 'doubleTop', label: 'Double Top', description: 'Coming soon', enabled: false },
+    { key: 'headShoulders', label: 'Head & Shoulders', description: 'Coming soon', enabled: false },
+    { key: 'triangle', label: 'Triangle', description: 'Coming soon', enabled: false },
+  ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function BeakChartWidget({ ticker }: Props) {
   const currentIndex = useSimulationStore((s) => s.currentIndex);
 
-  const chartAreaRef      = useRef<HTMLDivElement>(null);
-  const chartPaneHostRef  = useRef<HTMLDivElement>(null);
-  const containerRef      = useRef<HTMLDivElement>(null);
-  const chartRef          = useRef<Chart | null>(null);
-  const candleSeriesRef   = useRef<SeriesHandle | null>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
+  const chartPaneHostRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<Chart | null>(null);
+  const candleSeriesRef = useRef<SeriesHandle | null>(null);
   const indicatorSeriesRefs = useRef<Map<string, SeriesHandle>>(new Map());
-  const bbSeriesRefs        = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
-  const fractalDataRef        = useRef<Map<string, FractalData>>(new Map());
-  const kangarooTailDataRef   = useRef<Map<string, KangarooTailData>>(new Map());
-  const engulfingDataRef      = useRef<Map<string, EngulfingData>>(new Map());
-  const insideBarDataRef      = useRef<Map<string, InsideBarData>>(new Map());
-  const openLinesDataRef      = useRef<Map<string, OpenLinesData>>(new Map());
-  const zigzagDataRef         = useRef<Map<string, ZigZagData>>(new Map());
-  const panelHandlesRef       = useRef<Map<string, IndicatorPanelHandle>>(new Map());
+  const bbSeriesRefs = useRef<Map<string, { upper: SeriesHandle; lower: SeriesHandle }>>(new Map());
+  const fractalDataRef = useRef<Map<string, FractalData>>(new Map());
+  const kangarooTailDataRef = useRef<Map<string, KangarooTailData>>(new Map());
+  const engulfingDataRef = useRef<Map<string, EngulfingData>>(new Map());
+  const insideBarDataRef = useRef<Map<string, InsideBarData>>(new Map());
+  const openLinesDataRef = useRef<Map<string, OpenLinesData>>(new Map());
+  const zigzagDataRef = useRef<Map<string, ZigZagData>>(new Map());
+  const panelHandlesRef = useRef<Map<string, IndicatorPanelHandle>>(new Map());
 
-  const timeframeDropdownRef  = useRef<HTMLDivElement>(null);
-  const chartTypeDropdownRef  = useRef<HTMLDivElement>(null);
+  const timeframeDropdownRef = useRef<HTMLDivElement>(null);
+  const chartTypeDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [timeframe,     setTimeframe]     = useState<Timeframe>('1h');
+  const [timeframe, setTimeframe] = useState<Timeframe>('1h');
   const [timeframeOpen, setTimeframeOpen] = useState(false);
-  const [weeklyOpen,    setWeeklyOpen]    = useState(false);
+  const [weeklyOpen, setWeeklyOpen] = useState(false);
 
-  const [chartType,     setChartType]     = useState<ChartType>('candlestick');
+  const [chartType, setChartType] = useState<ChartType>('candlestick');
   const [chartTypeOpen, setChartTypeOpen] = useState(false);
 
   const [indicators, setIndicators] = useState<IndicatorConfig[]>([
@@ -173,45 +174,55 @@ export default function BeakChartWidget({ ticker }: Props) {
       source: 'close', offset: 0, lineWidth: 1, style: 'solid',
     },
   ]);
-  const [indicatorsModalOpen,    setIndicatorsModalOpen]    = useState(false);
-  const [indicatorsTab,          setIndicatorsTab]          = useState<IndicatorsTab>('indicators');
-  const [favoriteIndicatorKeys,  setFavoriteIndicatorKeys]  = useState<string[]>(['sma']);
+  const [indicatorsModalOpen, setIndicatorsModalOpen] = useState(false);
+  const [indicatorsTab, setIndicatorsTab] = useState<IndicatorsTab>('indicators');
+  const [favoriteIndicatorKeys, setFavoriteIndicatorKeys] = useState<string[]>(['sma']);
 
-  const [overlayOpen,           setOverlayOpen]           = useState(false);
-  const [settingsIndicatorId,   setSettingsIndicatorId]   = useState<string | null>(null);
-  const [hoverIndex,            setHoverIndex]            = useState<number | null>(null);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [settingsIndicatorId, setSettingsIndicatorId] = useState<string | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
-  const [isDark,           setIsDark]           = useState(true);
-  const [interactionMode,  setInteractionMode]  = useState<InteractionMode>('select');
-  const [navigationTool,   setNavigationTool]   = useState<NavigationTool>('select');
+  const [isDark, setIsDark] = useState(true);
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>('select');
+  const [navigationTool, setNavigationTool] = useState<NavigationTool>('select');
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
-  const [fibEditorOpen,    setFibEditorOpen]    = useState(false);
-  const [fibLevels,        setFibLevels]        = useState<FibLevel[]>(() => DEFAULT_FIB_LEVELS.map(l => ({ ...l })));
+  const [fibEditorOpen, setFibEditorOpen] = useState(false);
+  const [fibLevels, setFibLevels] = useState<FibLevel[]>(() => DEFAULT_FIB_LEVELS.map(l => ({ ...l })));
   const [viewportSync, setViewportSync] = useState<{
     start: number; end: number; totalBars: number; chartWidth: number; barSpacing: number;
   } | null>(null);
 
-  const dataset       = useMemo(() => marketService.getDataset(ticker), [ticker]);
-  const visiblePrices = useMemo(() => dataset.prices.slice(0, currentIndex + 1), [dataset, currentIndex]);
+  const [dataset, setDataset] = useState<MarketDataset | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    marketService.getDataset(ticker).then((ds) => {
+      if (active) setDataset(ds);
+    }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
+    return () => { active = false; };
+  }, [ticker]);
+
+  const visiblePrices = useMemo(() => dataset ? dataset.prices.slice(0, currentIndex + 1) : [], [dataset, currentIndex]);
 
   /** Prices normalised to PriceBar (time instead of timestamp) for beak-charts compute functions. */
   const priceData = useMemo((): PriceBar[] =>
     visiblePrices.map(p => ({
-      time:   p.timestamp,
-      open:   p.open,
-      high:   p.high,
-      low:    p.low,
-      close:  p.close,
+      time: p.timestamp,
+      open: p.open,
+      high: p.high,
+      low: p.low,
+      close: p.close,
       volume: p.volume,
     })),
-  [visiblePrices]);
+    [visiblePrices]);
 
-  const lastBar  = visiblePrices[visiblePrices.length - 1];
-  const prevBar  = visiblePrices.length > 1 ? visiblePrices[visiblePrices.length - 2] : lastBar;
-  const change   = lastBar ? lastBar.close - prevBar!.close : 0;
+  const lastBar = visiblePrices[visiblePrices.length - 1];
+  const prevBar = visiblePrices.length > 1 ? visiblePrices[visiblePrices.length - 2] : lastBar;
+  const change = lastBar ? lastBar.close - (prevBar?.close ?? lastBar.close) : 0;
   const { pipSize, decimals } = marketService.getTickerDisplayInfo(ticker);
   const changePips = Math.round(change / pipSize);
-  const changePct  = prevBar ? (change / prevBar.close) * 100 : 0;
+  const changePct = prevBar ? (change / prevBar.close) * 100 : 0;
 
   const chartLabel = useMemo(
     () => CHART_TYPE_OPTIONS.find((o) => o.value === chartType)?.label ?? 'Candlestick',
@@ -306,7 +317,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       chart.onCrosshairMove(null);
       chart.onDrawingChange(null);
       chart.destroy();
-      chartRef.current      = null;
+      chartRef.current = null;
       candleSeriesRef.current = null;
       indicatorSeriesRefs.current.clear();
     };
@@ -341,17 +352,17 @@ export default function BeakChartWidget({ ticker }: Props) {
       if (indicator.type === 'volume') {
         const series = chart.addSeries('histogram');
         series.setData(visiblePrices.map((p): HistogramDataPoint => ({
-          time:  p.timestamp,
+          time: p.timestamp,
           value: p.volume,
           color: p.close >= p.open ? `${indicator.color}55` : '#ef444455',
         })));
         indicatorSeriesRefs.current.set(indicator.id, series);
       } else if (indicator.type === 'bb') {
-        const bands        = bbBandDataMap.get(indicator.id);
+        const bands = bbBandDataMap.get(indicator.id);
         const middleSeries = chart.addSeries('line', { color: indicator.color, lineWidth: indicator.lineWidth });
         middleSeries.setData(indicatorDataMap.get(indicator.id) ?? []);
         indicatorSeriesRefs.current.set(indicator.id, middleSeries);
-        const bandLW     = Math.max(1, indicator.lineWidth * 0.7);
+        const bandLW = Math.max(1, indicator.lineWidth * 0.7);
         const upperSeries = chart.addSeries('line', { color: indicator.color, lineWidth: bandLW });
         upperSeries.setData(bands?.upper ?? []);
         const lowerSeries = chart.addSeries('line', { color: indicator.color, lineWidth: bandLW });
@@ -387,7 +398,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       if (!series) continue;
       if (indicator.type === 'volume') {
         series.setData(visiblePrices.map((p): HistogramDataPoint => ({
-          time:  p.timestamp,
+          time: p.timestamp,
           value: p.volume,
           color: p.close >= p.open ? `${indicator.color}55` : '#ef444455',
         })));
@@ -395,7 +406,7 @@ export default function BeakChartWidget({ ticker }: Props) {
         series.setData(indicatorDataMap.get(indicator.id) ?? []);
         if (indicator.type === 'bb') {
           const bands = bbBandDataMap.get(indicator.id);
-          const bb    = bbSeriesRefs.current.get(indicator.id);
+          const bb = bbSeriesRefs.current.get(indicator.id);
           bb?.upper.setData(bands?.upper ?? []);
           bb?.lower.setData(bands?.lower ?? []);
         }
@@ -418,7 +429,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       const { up, down } = computeFractals(priceData);
       fractalDataRef.current.set(indicator.id, {
         up, down,
-        color:   indicator.color,
+        color: indicator.color,
         visible: indicator.visible,
       });
     }
@@ -436,7 +447,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       const { bullish, bearish } = computeKangarooTails(priceData);
       kangarooTailDataRef.current.set(indicator.id, {
         bullish, bearish,
-        color:   indicator.color,
+        color: indicator.color,
         visible: indicator.visible,
       });
     }
@@ -454,7 +465,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       const { bullish, bearish } = computeEngulfingCandles(priceData);
       engulfingDataRef.current.set(indicator.id, {
         bullish, bearish,
-        color:   indicator.color,
+        color: indicator.color,
         visible: indicator.visible,
       });
     }
@@ -472,7 +483,7 @@ export default function BeakChartWidget({ ticker }: Props) {
       const points = computeInsideBars(priceData);
       insideBarDataRef.current.set(indicator.id, {
         points,
-        color:   indicator.color,
+        color: indicator.color,
         visible: indicator.visible,
       });
     }
@@ -488,20 +499,20 @@ export default function BeakChartWidget({ ticker }: Props) {
     openLinesDataRef.current.clear();
     for (const indicator of olIndicators) {
       const { daily, weekly, monthly } = computeOpenLines(priceData, {
-        lookbackDays:     indicator.openLinesLookbackDays ?? 90,
-        dailyStartHour:   indicator.dailyOpenHour         ?? 0,
-        weeklyStartHour:  indicator.weeklyOpenHour         ?? 0,
-        monthlyStartHour: indicator.monthlyOpenHour        ?? 0,
+        lookbackDays: indicator.openLinesLookbackDays ?? 90,
+        dailyStartHour: indicator.dailyOpenHour ?? 0,
+        weeklyStartHour: indicator.weeklyOpenHour ?? 0,
+        monthlyStartHour: indicator.monthlyOpenHour ?? 0,
       });
       openLinesDataRef.current.set(indicator.id, {
         daily, weekly, monthly,
-        showDaily:    indicator.showDailyOpen   ?? true,
-        showWeekly:   indicator.showWeeklyOpen  ?? true,
-        showMonthly:  indicator.showMonthlyOpen ?? true,
-        dailyColor:   indicator.dailyOpenColor   ?? '#38bdf8',
-        weeklyColor:  indicator.weeklyOpenColor  ?? '#a78bfa',
+        showDaily: indicator.showDailyOpen ?? true,
+        showWeekly: indicator.showWeeklyOpen ?? true,
+        showMonthly: indicator.showMonthlyOpen ?? true,
+        dailyColor: indicator.dailyOpenColor ?? '#38bdf8',
+        weeklyColor: indicator.weeklyOpenColor ?? '#a78bfa',
         monthlyColor: indicator.monthlyOpenColor ?? '#f59e0b',
-        visible:      indicator.visible,
+        visible: indicator.visible,
       });
     }
     if (olIndicators.length > 0) {
@@ -518,9 +529,9 @@ export default function BeakChartWidget({ ticker }: Props) {
       const points = computeZigZag(priceData, indicator.period);
       zigzagDataRef.current.set(indicator.id, {
         points,
-        color:     indicator.color,
+        color: indicator.color,
         lineWidth: indicator.lineWidth,
-        visible:   indicator.visible,
+        visible: indicator.visible,
       });
     }
     if (zzIndicators.length > 0) {
@@ -591,23 +602,23 @@ export default function BeakChartWidget({ ticker }: Props) {
     const tick = () => {
       const chart = chartRef.current;
       if (chart) {
-        const viewport     = chart.getViewport();
-        const dataManager  = chart.getDataManager();
-        const totalBars    = dataManager.getTotalBars();
+        const viewport = chart.getViewport();
+        const dataManager = chart.getDataManager();
+        const totalBars = dataManager.getTotalBars();
         if (totalBars > 0) {
           const range = viewport.getVisibleRange(totalBars);
           const next = {
-            start:      range.startIndex,
-            end:        range.endIndex,
+            start: range.startIndex,
+            end: range.endIndex,
             totalBars,
             chartWidth: Math.max(0, viewport.chartWidth),
             barSpacing: viewport.barSpacing,
           };
           setViewportSync((prev) => (
             !prev ||
-              prev.start      !== next.start      ||
-              prev.end        !== next.end        ||
-              prev.totalBars  !== next.totalBars  ||
+              prev.start !== next.start ||
+              prev.end !== next.end ||
+              prev.totalBars !== next.totalBars ||
               Math.abs(prev.chartWidth - next.chartWidth) > 0.5 ||
               Math.abs(prev.barSpacing - next.barSpacing) > 0.01
               ? next
@@ -660,16 +671,16 @@ export default function BeakChartWidget({ ticker }: Props) {
   }) => {
     const id = `${entry.type}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const defaults: Record<string, Partial<IndicatorConfig>> = {
-      ao:       { period: 5,  source: 'median' },
-      rsi:      { period: 14, overbought: 70, oversold: 30 },
-      macd:     { period: 12, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
-      atr:      { period: 14 },
-      bb:       { period: 20, bbStdDev: 2 },
-      volume:   { period: 1 },
-      fractals:     { period: 5 },
+      ao: { period: 5, source: 'median' },
+      rsi: { period: 14, overbought: 70, oversold: 30 },
+      macd: { period: 12, fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 },
+      atr: { period: 14 },
+      bb: { period: 20, bbStdDev: 2 },
+      volume: { period: 1 },
+      fractals: { period: 5 },
       kangarooTail: { period: 1 },
-      engulfing:    { period: 1 },
-      insideBar:    { period: 1 },
+      engulfing: { period: 1 },
+      insideBar: { period: 1 },
       openLines: {
         period: 1,
         showDailyOpen: true, showWeeklyOpen: true, showMonthlyOpen: true,
@@ -677,22 +688,22 @@ export default function BeakChartWidget({ ticker }: Props) {
         openLinesLookbackDays: 90,
         dailyOpenColor: '#38bdf8', weeklyOpenColor: '#a78bfa', monthlyOpenColor: '#f59e0b',
       },
-      zigzag:       { period: 1 },   // 1 % deviation
+      zigzag: { period: 1 },   // 1 % deviation
     };
     const d = defaults[entry.type] ?? {};
     setIndicators((prev) => [
       ...prev,
       {
         id,
-        type:      entry.type,
+        type: entry.type,
         placement: entry.placement,
-        period:    d.period ?? 9,
-        color:     entry.color,
-        visible:   true,
-        source:    d.source ?? 'close',
-        offset:    0,
+        period: d.period ?? 9,
+        color: entry.color,
+        visible: true,
+        source: d.source ?? 'close',
+        offset: 0,
         lineWidth: 1.8,
-        style:     'solid',
+        style: 'solid',
         ...d,
       },
     ]);
@@ -746,6 +757,21 @@ export default function BeakChartWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-1.5">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
+      {(!dataset) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-50 backdrop-blur-sm rounded-lg pointer-events-none">
+          <span className="text-xs text-gray-400">Loading chart data...</span>
+        </div>
+      )}
       {/* Top bar */}
       <div className="nodrag flex items-center gap-2">
         <span className="text-sm font-semibold text-white/90">{ticker}</span>
@@ -870,7 +896,7 @@ export default function BeakChartWidget({ ticker }: Props) {
                     <div className="text-[11px] text-slate-500 px-1 py-1">No active indicators</div>
                   )}
                   {indicators.map((indicator) => {
-                    const rowValue  = indicatorDataMap.get(indicator.id)?.[pointIndex]?.value ?? null;
+                    const rowValue = indicatorDataMap.get(indicator.id)?.[pointIndex]?.value ?? null;
                     const valDecimals = indicator.placement === 'bottom' ? 2 : decimals;
                     return (
                       <div key={indicator.id} className="group rounded border border-slate-700/70 bg-slate-800/65 px-1.5 py-1 mb-1 last:mb-0">
@@ -892,8 +918,8 @@ export default function BeakChartWidget({ ticker }: Props) {
                         <div className="hidden group-hover:flex mt-1 items-center gap-1">
                           <TinyActionButton label={indicator.visible ? 'Hide' : 'View'} onClick={() => updateIndicator(indicator.id, { visible: !indicator.visible })} />
                           <TinyActionButton label="Settings" onClick={() => setSettingsIndicatorId(indicator.id)} />
-                          <TinyActionButton label="Delete"   onClick={() => removeIndicator(indicator.id)} />
-                          <TinyActionButton label="Copy"     onClick={() => copyIndicator(indicator.id)} />
+                          <TinyActionButton label="Delete" onClick={() => removeIndicator(indicator.id)} />
+                          <TinyActionButton label="Copy" onClick={() => copyIndicator(indicator.id)} />
                         </div>
                       </div>
                     );
@@ -1375,9 +1401,9 @@ function TimescaleRow({
   onZoomX: (factor: number, centerX: number) => void;
 }) {
   const lastXRef = useRef<number | null>(null);
-  const start    = viewportSync?.start ?? Math.max(0, prices.length - 40);
-  const end      = viewportSync?.end   ?? Math.max(0, prices.length - 1);
-  const count    = Math.max(1, end - start + 1);
+  const start = viewportSync?.start ?? Math.max(0, prices.length - 40);
+  const end = viewportSync?.end ?? Math.max(0, prices.length - 1);
+  const count = Math.max(1, end - start + 1);
   const barSpacing = viewportSync?.barSpacing ?? (chartWidth / count);
   const step = Math.max(1, Math.floor(count / 6));
   const width = Math.max(120, Math.floor(chartWidth));
@@ -1392,7 +1418,7 @@ function TimescaleRow({
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (lastXRef.current === null) return;
-    const dx     = e.clientX - lastXRef.current;
+    const dx = e.clientX - lastXRef.current;
     const factor = 1 - dx * ZOOM_SENSITIVITY;
     onZoomX(factor, effectiveChartWidth / 2);
     lastXRef.current = e.clientX;
@@ -1441,9 +1467,9 @@ function TimescaleRow({
 // ── Pure helpers ──────────────────────────────────────────────────────────────
 
 function formatTimeShort(timestamp: number): string {
-  const d     = new Date(timestamp);
+  const d = new Date(timestamp);
   const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day   = String(d.getDate()).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${month}/${day}`;
 }
 

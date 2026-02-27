@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { marketService } from '../../services/marketService';
 import { formatDate } from '../../utils/format';
+import type { MarketDataset } from '../../types';
 
 type Props = { ticker: string };
 
@@ -21,14 +22,26 @@ const CENTRAL_BANKS: Record<string, string> = {
 };
 
 export default function EarningsWidget({ ticker }: Props) {
-  const dataset = useMemo(() => marketService.getDataset(ticker), [ticker]);
-  const currentPrice = dataset.prices[dataset.prices.length - 1]?.close ?? 0;
+  const [dataset, setDataset] = useState<MarketDataset | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    marketService.getDataset(ticker).then((ds) => {
+      if (active) setDataset(ds);
+    }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
+    return () => { active = false; };
+  }, [ticker]);
+
+  const currentPrice = dataset?.prices[dataset.prices.length - 1]?.close ?? 0;
 
   const [base, quote] = ticker.includes('/') ? ticker.split('/') : [ticker, ''];
   const baseCB = CENTRAL_BANKS[base] ?? base;
   const quoteCB = CENTRAL_BANKS[quote] ?? quote;
 
   const events = useMemo(() => {
+    if (!dataset) return [];
+
     // Generate more events from the earning dates as seeds
     const allEvents: {
       id: number;
@@ -81,6 +94,21 @@ export default function EarningsWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-3">
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
+          <div className="text-center p-4">
+            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span className="text-sm font-medium text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
+      {(!dataset) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50 z-10 backdrop-blur-sm rounded-lg">
+          <span className="text-xs text-gray-400">Loading events...</span>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider">
           Economic Calendar - {ticker}
@@ -109,11 +137,10 @@ export default function EarningsWidget({ ticker }: Props) {
                 <span className="text-[10px] font-bold text-cyan-400 font-mono">{e.currency}</span>
                 <span className="text-xs font-medium text-white">{e.event}</span>
               </div>
-              <div className={`text-[10px] px-1.5 py-0.5 rounded ${
-                e.daysUntil <= 7
+              <div className={`text-[10px] px-1.5 py-0.5 rounded ${e.daysUntil <= 7
                   ? 'bg-amber-500/20 text-amber-400'
                   : 'bg-gray-700/50 text-gray-400'
-              }`}>
+                }`}>
                 {e.daysUntil > 0 ? `${e.daysUntil}d` : 'Today'}
               </div>
             </div>

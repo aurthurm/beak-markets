@@ -62,11 +62,10 @@ export default function AlertsWidget({ ticker }: Props) {
         {filteredAlerts.map((alert) => (
           <div
             key={alert.id}
-            className={`flex items-center justify-between px-2.5 py-2 rounded-lg border ${
-              alert.triggered
+            className={`flex items-center justify-between px-2.5 py-2 rounded-lg border ${alert.triggered
                 ? 'bg-amber-500/10 border-amber-500/30'
                 : 'bg-gray-800/40 border-gray-700/30'
-            }`}
+              }`}
           >
             <div>
               <div className="flex items-center gap-1.5">

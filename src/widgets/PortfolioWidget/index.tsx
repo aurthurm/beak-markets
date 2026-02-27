@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { usePortfolioStore } from '../../store/usePortfolioStore';
 import { marketService } from '../../services/marketService';
@@ -15,14 +15,28 @@ export default function PortfolioWidget() {
   const [tradeSide, setTradeSide] = useState<'buy' | 'sell'>('buy');
   const [tradeQty, setTradeQty] = useState('1');
   const [tradePrice, setTradePrice] = useState('');
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({});
 
-  const currentPrices = useMemo(() => {
-    const prices: Record<string, number> = {};
-    const tickers = new Set(trades.map((t) => t.ticker));
-    tickers.forEach((ticker) => {
-      prices[ticker] = marketService.getLatestPrice(ticker, currentIndex);
-    });
-    return prices;
+  useEffect(() => {
+    let active = true;
+    const fetchPrices = async () => {
+      const prices: Record<string, number> = {};
+      const tickers = new Set(trades.map((t) => t.ticker));
+      if (tickers.size === 0) return;
+
+      for (const ticker of tickers) {
+        try {
+          // getLatestPrice is now asynchronous indirectly since getDataset is actually what gets it, let's keep it simple
+          const price = await marketService.getLatestPrice(ticker, currentIndex);
+          if (active) prices[ticker] = price;
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (active) setCurrentPrices(prices);
+    };
+    fetchPrices();
+    return () => { active = false; };
   }, [trades, currentIndex]);
 
   const positions = useMemo(() => getPositions(currentPrices), [getPositions, currentPrices]);
@@ -41,9 +55,12 @@ export default function PortfolioWidget() {
     return curve;
   }, [totalPnl]);
 
-  const handleAddTrade = () => {
+  const handleAddTrade = async () => {
     const qty = parseInt(tradeQty);
-    const price = parseFloat(tradePrice) || marketService.getLatestPrice(tradeTicker, currentIndex);
+    let price = parseFloat(tradePrice);
+    if (isNaN(price)) {
+      price = await marketService.getLatestPrice(tradeTicker, currentIndex);
+    }
     if (!qty || qty <= 0) return;
     addTrade({ ticker: tradeTicker.toUpperCase(), side: tradeSide, quantity: qty, price });
     setTradePrice('');
@@ -133,11 +150,10 @@ export default function PortfolioWidget() {
         />
         <button
           onClick={handleAddTrade}
-          className={`px-2 py-1 text-xs rounded border ${
-            tradeSide === 'buy'
+          className={`px-2 py-1 text-xs rounded border ${tradeSide === 'buy'
               ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/30'
               : 'bg-red-600/20 text-red-400 border-red-500/30'
-          }`}
+            }`}
         >
           {tradeSide === 'buy' ? 'Buy' : 'Sell'}
         </button>
