@@ -1,4 +1,6 @@
+import { positionsFromTrades } from '../services/portfolioMath';
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { v4 as uuid } from 'uuid';
 import type { Trade, PortfolioPosition } from '../types';
 
@@ -9,10 +11,11 @@ type PortfolioStore = {
   getPositions: (currentPrices: Record<string, number>) => PortfolioPosition[];
 };
 
-export const usePortfolioStore = create<PortfolioStore>((set, get) => ({
+export const usePortfolioStore = create<PortfolioStore>()(persist((set, get) => ({
   trades: [],
 
   addTrade: (trade) => {
+    if (!Number.isFinite(trade.quantity) || trade.quantity <= 0 || !Number.isFinite(trade.price) || trade.price <= 0) return;
     set({
       trades: [...get().trades, { ...trade, id: uuid(), timestamp: Date.now() }],
     });
@@ -23,36 +26,6 @@ export const usePortfolioStore = create<PortfolioStore>((set, get) => ({
   },
 
   getPositions: (currentPrices) => {
-    const { trades } = get();
-    const map = new Map<string, { qty: number; cost: number }>();
-
-    trades.forEach((t) => {
-      const existing = map.get(t.ticker) ?? { qty: 0, cost: 0 };
-      if (t.side === 'buy') {
-        existing.qty += t.quantity;
-        existing.cost += t.quantity * t.price;
-      } else {
-        existing.qty -= t.quantity;
-        existing.cost -= t.quantity * t.price;
-      }
-      map.set(t.ticker, existing);
-    });
-
-    const positions: PortfolioPosition[] = [];
-    map.forEach((val, ticker) => {
-      if (val.qty !== 0) {
-        const currentPrice = currentPrices[ticker] ?? 0;
-        const avgPrice = val.cost / val.qty;
-        positions.push({
-          ticker,
-          quantity: val.qty,
-          avgPrice: +avgPrice.toFixed(2),
-          currentPrice,
-          pnl: +((currentPrice - avgPrice) * val.qty).toFixed(2),
-        });
-      }
-    });
-
-    return positions;
+    return positionsFromTrades(get().trades, currentPrices);
   },
-}));
+}), { name: 'canvas-trader-paper-ledger', partialize: (state) => ({ trades: state.trades }) }));

@@ -1,0 +1,16 @@
+import type { WidgetType } from '../types';
+
+export const EURUSD_DESK_NAME = 'EUR/USD · Multi-timeframe desk';
+
+// A wide chart workbench with macro context on the right and planning below.
+export const eurusdDeskWidgets: { type: WidgetType; ticker: string; x: number; y: number; width: number; height: number; settings: Record<string, unknown> }[] = [
+  { type: 'chart', ticker: 'EUR/USD', x: 120, y: 60, width: 620, height: 370, settings: { title: 'EUR/USD · Monthly structure', description: '01 · Broad trend and major turning points', chartTimeframe: 'M', chartIndicators: [] } },
+  { type: 'chart', ticker: 'EUR/USD', x: 760, y: 60, width: 620, height: 370, settings: { title: 'EUR/USD · Weekly bias', description: '02 · Trend, pullbacks and weekly range', chartTimeframe: 'W', chartIndicators: ['sma20'] } },
+  { type: 'chart', ticker: 'EUR/USD', x: 120, y: 450, width: 620, height: 370, settings: { title: 'EUR/USD · Daily setup', description: '03 · Confirm price structure before planning', chartTimeframe: 'D', chartIndicators: ['ema12', 'sma20'] } },
+  { type: 'chart', ticker: 'DXY', x: 760, y: 450, width: 620, height: 370, settings: { title: 'DXY · Dollar context', description: '04 · Dollar index; includes a large EUR weight', chartTimeframe: 'D', chartIndicators: ['sma20'] } },
+  { type: 'briefing', ticker: 'EUR/USD', x: 1400, y: 60, width: 460, height: 760, settings: { title: 'Macro brief · EUR & USD', briefingCadence: 'weekly', briefingScope: 'pair' } },
+  { type: 'earnings', ticker: 'EUR/USD', x: 120, y: 840, width: 400, height: 460, settings: { title: 'Catalysts · Economic calendar' } },
+  { type: 'liquidity', ticker: 'EUR/USD', x: 540, y: 840, width: 400, height: 460, settings: { title: 'Daily range · Sweeps & rejections' } },
+  { type: 'scenario', ticker: 'EUR/USD', x: 960, y: 840, width: 440, height: 600, settings: { title: 'Trade thesis · Conditional example', scenario: { pair: 'EUR/USD', side: 'long', status: 'draft', thesis: 'Example only: consider a long setup if monthly support holds and weekly structure stops making lower lows. This is a checklist, not a current market call.', catalyst: 'Review the next US/Eurozone inflation release or central-bank communication in the calendar. Compare the release with its forecast.', trigger: 'Wait for a completed daily rejection of an observable prior low, followed by a close back above the rejected range. Confirm that the weekly structure supports the idea.', invalidation: 'A completed daily close below the rejection low, or new evidence contradicting the macro thesis. Define actual prices after reviewing the charts.', source: 'Use the linked briefing evidence and calendar. DXY is context and partly reflects EUR/USD itself; it is not independent confirmation.', entry: '', stop: '', target: '', outcome: '' } } },
+  { type: 'sticker', ticker: 'EUR/USD', x: 1420, y: 840, width: 440, height: 370, settings: { content: 'EUR/USD RESEARCH ROUTINE\n\n01  Monthly: mark broad structure.\n02  Weekly: identify bias and key range.\n03  Daily: require a completed-bar trigger.\n04  DXY: compare dollar context.\n05  Review events, sources and counterarguments.\n06  Record entry, invalidation and risk before paper trading.\n\nDaily provider data; weekly/monthly are aggregates. No intraday feed, live execution or automatic AI charges.' } },
+];

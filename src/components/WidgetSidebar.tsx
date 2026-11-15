@@ -2,9 +2,13 @@ import { useCanvasStore } from '../store/useCanvasStore';
 import type { WidgetType } from '../types';
 import { WIDGET_DEFAULTS } from '../types';
 
-const widgetTypes: WidgetType[] = ['chart', 'beakchart', 'watchlist', 'financials', 'valuation', 'interestRates', 'alerts', 'portfolio', 'earnings', 'news', 'sentiment', 'ainews', 'cot', 'yields', 'youtube', 'sticker'];
+const widgetTypes: WidgetType[] = ['briefing', 'chart', 'beakchart', 'watchlist', 'financials', 'valuation', 'interestRates', 'alerts', 'portfolio', 'earnings', 'news', 'sentiment', 'ainews', 'cot', 'yields', 'youtube', 'sticker', 'macroboard', 'liquidity', 'scenario'];
 
 const WIDGET_ICONS: Record<WidgetType, React.ReactNode> = {
+  briefing: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 3h16v18H4zM8 7h8M8 11h8M8 15h4M16 14v5M14 16h4" /></svg>,
+  macroboard: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 20V4h18v16H3Z M3 9h18 M9 9v11 M15 9v11" /></svg>,
+  liquidity: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 7h20M2 17h20M3 12l5-8 5 16 8-8" /></svg>,
+  scenario: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 3v18M5 12h7l7-7M12 12l7 7M15 5h4v4M15 19h4v-4" /></svg>,
   chart: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 3v18h18" />
@@ -122,6 +126,9 @@ import { WIDGET_DRAG_DATA_KEY } from '../constants';
 
 export default function WidgetSidebar() {
   const addWidget = useCanvasStore((s) => s.addWidget);
+  const addResearchPresets = useCanvasStore((s) => s.addResearchPresets);
+  const addEurusdDesk = useCanvasStore((s) => s.addEurusdDesk);
+  const addResearchDesk = useCanvasStore((s) => s.addResearchDesk);
 
   const handleDragStart = (e: React.DragEvent, type: WidgetType) => {
     e.dataTransfer.setData(WIDGET_DRAG_DATA_KEY, type);
@@ -157,9 +164,12 @@ export default function WidgetSidebar() {
   };
 
   return (
-    <div data-widget-sidebar className="fixed left-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-1 py-3 px-2 bg-gray-900/90 backdrop-blur-xl border border-gray-700/60 rounded-xl shadow-2xl shadow-black/40">
+    <div data-widget-sidebar className="fixed left-4 top-1/2 -translate-y-1/2 z-40 grid grid-cols-2 gap-1 py-3 px-2 max-h-[80vh] overflow-y-auto bg-gray-900/90 backdrop-blur-xl border border-gray-700/60 rounded-xl shadow-2xl shadow-black/40">
+      <button onClick={addEurusdDesk} className="col-span-2 text-[10px] text-amber-200 border border-amber-400/40 bg-amber-400/5 rounded py-2" title="Open the EUR/USD multi-timeframe example">EUR/USD desk</button>
+      <button onClick={addResearchDesk} className="col-span-2 text-[10px] text-cyan-300 border border-cyan-500/30 rounded py-2" title="Create a macro research dashboard">Research desk</button>
+      <button onClick={addResearchPresets} className="col-span-2 text-[10px] text-cyan-300 border border-cyan-500/30 rounded py-2" title="Add three research dashboard presets">3 presets</button>
       {widgetTypes.map((type) => (
-        <div
+        <button type="button" aria-label={`Add ${WIDGET_DEFAULTS[type].label}`}
           key={type}
           draggable
           onDragStart={(e) => handleDragStart(e, type)}
@@ -168,7 +178,7 @@ export default function WidgetSidebar() {
           className="flex items-center justify-center w-10 h-10 rounded-lg text-gray-400 hover:text-cyan-400 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all duration-200 cursor-grab active:cursor-grabbing [&_svg]:shrink-0"
         >
           {WIDGET_ICONS[type]}
-        </div>
+        </button>
       ))}
     </div>
   );

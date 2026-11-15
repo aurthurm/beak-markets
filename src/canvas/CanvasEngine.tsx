@@ -15,6 +15,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { useMemo } from 'react';
+import { useTickerStore } from '../store/useTickerStore';
 import { useCanvasStore } from '../store/useCanvasStore';
 import { WIDGET_DRAG_DATA_KEY } from '../constants';
 import type { WidgetType, WidgetConfig } from '../types';
@@ -61,6 +62,8 @@ function ResizeGuidesOverlay() {
 }
 
 function CanvasInner() {
+  const globalTicker = useTickerStore((state) => state.globalTicker);
+  const dashboards = useCanvasStore((state) => state.dashboards);
   const nodes = useCanvasStore((s) => s.nodes);
   const edges = useCanvasStore((s) => s.edges);
   const onNodesChange = useCanvasStore((s) => s.onNodesChange);
@@ -138,7 +141,7 @@ function CanvasInner() {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [nodes, edges, saveLayout]);
+  }, [nodes, edges, dashboards, activeDashboardId, globalTicker, saveLayout]);
 
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
@@ -151,9 +154,10 @@ function CanvasInner() {
     () =>
       nodes.map((n) => ({
         ...n,
-        draggable: !(n.data as WidgetConfig).locked,
+        hidden: activeDashboardId !== null && (n.data as WidgetConfig).dashboardId !== activeDashboardId,
+        draggable: canvasMode === 'move' && !(n.data as WidgetConfig).locked,
       })),
-    [nodes]
+    [nodes, activeDashboardId, canvasMode]
   );
 
   const controlBtn =
@@ -222,7 +226,7 @@ function CanvasInner() {
         <button
           type="button"
           onClick={() => setCanvasMode('move')}
-          title="Move mode — click anywhere on a widget to drag it"
+          title="Move mode — drag a widget header to move it"
           className={`${controlBtn} ${canvasMode === 'move' ? 'bg-cyan-500/30 text-cyan-400' : ''}`}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

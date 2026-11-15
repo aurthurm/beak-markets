@@ -3,7 +3,6 @@ import { marketService } from '../../services/marketService';
 import { useTickerStore } from '../../store/useTickerStore';
 import { useCanvasStore } from '../../store/useCanvasStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
-import type { MarketDataset } from '../../types';
 
 type Props = { ticker: string; widgetId: string };
 
@@ -19,9 +18,12 @@ type WatchlistItem = {
 
 export default function WatchlistWidget({ widgetId }: Props) {
   const allPairs = useMemo(() => marketService.getAvailableTickers(), []);
-  const [watchlist, setWatchlist] = useState<string[]>(allPairs.map((s) => s.ticker));
+  const settings = useCanvasStore((state) => state.nodes.find((node) => node.id === widgetId)?.data.settings) as Record<string, unknown> | undefined;
+  const watchlist = useMemo(() => Array.isArray(settings?.watchlist) ? settings.watchlist.filter((value): value is string => typeof value === 'string') : allPairs.map((pair) => pair.ticker), [settings?.watchlist, allPairs]);
+  const setWatchlist = (watchlist: string[]) => useCanvasStore.getState().updateWidgetData(widgetId, { settings: { ...settings, watchlist } });
   const [newTicker, setNewTicker] = useState('');
   const [data, setData] = useState<WatchlistItem[]>([]);
+  const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const setGlobalTicker = useTickerStore((s) => s.setGlobalTicker);
   const updateWidgetData = useCanvasStore((s) => s.updateWidgetData);
@@ -31,22 +33,25 @@ export default function WatchlistWidget({ widgetId }: Props) {
     let active = true;
     const fetchData = async () => {
       const results: WatchlistItem[] = [];
+      if (active) { setError(null); setData([]); }
       for (const ticker of watchlist) {
         try {
           const ds = await marketService.getDataset(ticker);
           if (!active) return;
           const pair = allPairs.find((s) => s.ticker === ticker);
-          const price = ds.prices[currentIndex]?.close ?? 0;
-          const prevPrice = ds.prices[Math.max(0, currentIndex - 1)]?.close ?? price;
+          const index = Math.min(currentIndex, ds.prices.length - 1);
+          const price = ds.prices[index]?.close;
+          if (!price) throw new Error(`No prices for ${ticker}`);
+          const prevPrice = ds.prices[Math.max(0, index - 1)]?.close ?? price;
           const change = price - prevPrice;
           const pipSize = pair?.pipSize ?? (ticker.includes('JPY') ? 0.01 : 0.0001);
           const decimals = pipSize >= 0.1 ? 2 : pipSize >= 0.01 ? 3 : 5;
           const changePips = Math.round(change / pipSize);
           const changePct = prevPrice ? (change / prevPrice) * 100 : 0;
           results.push({ ticker, name: pair?.name ?? ticker, price, change, changePips, changePct, decimals });
-        } catch (e: any) {
-          console.error('Failed to fetch for', ticker);
-          if (active) setError(e.message || 'Failed to fetch Watchlist data');
+          if (active) setData([...results]);
+        } catch {
+          if (active) setError('Some pairs are unavailable. Available prices are shown; retry to check again.');
         }
       }
       if (active) {
@@ -55,7 +60,7 @@ export default function WatchlistWidget({ widgetId }: Props) {
     };
     fetchData();
     return () => { active = false; };
-  }, [watchlist, currentIndex, allPairs]);
+  }, [watchlist, currentIndex, allPairs, revision]);
 
   const handleSelect = (ticker: string) => {
     setGlobalTicker(ticker);
@@ -64,6 +69,7 @@ export default function WatchlistWidget({ widgetId }: Props) {
 
   const handleAdd = () => {
     const t = newTicker.toUpperCase().trim();
+    if (!allPairs.some((pair) => pair.ticker === t)) { setError('Choose a supported pair, e.g. EUR/USD.'); return; }
     if (t && !watchlist.includes(t)) {
       setWatchlist([...watchlist, t]);
     }
@@ -72,16 +78,8 @@ export default function WatchlistWidget({ widgetId }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-2 relative">
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
-          <div className="text-center p-4">
-            <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span className="text-sm font-medium text-red-400">{error}</span>
-          </div>
-        </div>
-      )}
+      {error && <div role="alert" className="nodrag text-[10px] text-amber-300">{error} <button onClick={() => setRevision((value) => value + 1)}>Retry</button></div>}
+      <p className="text-[10px] text-gray-500">Yahoo daily prices; gold is a GC=F futures proxy.</p>
       {/* Add pair */}
       <div className="nodrag flex gap-1">
         <input

@@ -68,7 +68,7 @@ export function indicatorLabel(
       return `MACD ${indicator.fastPeriod ?? 12},${indicator.slowPeriod ?? 26},${indicator.signalPeriod ?? 9}`;
     }
     if (indicator.type === 'bb') return `BB ${indicator.period} (${indicator.bbStdDev ?? 2})`;
-    if (indicator.type === 'sma' || indicator.type === 'ema' || indicator.type === 'rsi' || indicator.type === 'atr' || indicator.type === 'zigzag') {
+    if (indicator.type === 'sma' || indicator.type === 'ema' || indicator.type === 'rsi' || indicator.type === 'atr') {
       return `${short} ${indicator.period}`;
     }
     return def.name;
@@ -84,8 +84,8 @@ type Timeframe = '15m' | '1h' | '4h' | 'D' | 'W' | '2W' | '1M';
 type IndicatorsTab = 'indicators' | 'strategies' | 'patterns';
 const TIME_SCALE_HEIGHT = 24;
 
-const TIMEFRAMES: Timeframe[] = ['15m', '1h', '4h', 'D', 'W'];
-const WEEKLY_TIMEFRAMES: Timeframe[] = ['W', '2W', '1M'];
+const TIMEFRAMES: Timeframe[] = ['D'];
+const WEEKLY_TIMEFRAMES: Timeframe[] = [];
 
 const CHART_TYPE_OPTIONS: { value: ChartType; label: string }[] = [
   { value: 'candlestick', label: 'Candlestick' },
@@ -188,7 +188,7 @@ export default function BeakChartWidget({ ticker }: Props) {
   const timeframeDropdownRef = useRef<HTMLDivElement>(null);
   const chartTypeDropdownRef = useRef<HTMLDivElement>(null);
 
-  const [timeframe, setTimeframe] = useState<Timeframe>('1h');
+  const [timeframe, setTimeframe] = useState<Timeframe>('D');
   const [timeframeOpen, setTimeframeOpen] = useState(false);
   const [weeklyOpen, setWeeklyOpen] = useState(false);
 
@@ -225,16 +225,17 @@ export default function BeakChartWidget({ ticker }: Props) {
     start: number; end: number; totalBars: number; chartWidth: number; barSpacing: number;
   } | null>(null);
 
+  const [revision, setRevision] = useState(0);
   const [dataset, setDataset] = useState<MarketDataset | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    marketService.getDataset(ticker).then((ds) => {
-      if (active) setDataset(ds);
+    marketService.getDataset(ticker, revision > 0).then((ds) => {
+      if (active) { setDataset(ds); setError(null); }
     }).catch((err) => { if (active) setError(err.message || 'Error loading data'); });
     return () => { active = false; };
-  }, [ticker]);
+  }, [ticker, revision]);
 
   const visiblePrices = useMemo(() => dataset ? dataset.prices.slice(0, currentIndex + 1) : [], [dataset, currentIndex]);
 
@@ -818,13 +819,14 @@ export default function BeakChartWidget({ ticker }: Props) {
 
   return (
     <div className="flex flex-col h-full gap-1.5">
+      <p className="text-[10px] text-gray-500">{ticker === 'XAU/USD' ? 'Yahoo GC=F gold futures proxy' : 'Yahoo daily OHLC'} · {lastBar ? `Displayed daily bar ${new Date(lastBar.timestamp).toISOString().slice(0, 10)}` : 'Loading prices…'} · No centralized spot-FX volume.</p>
       {error && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-900/90 z-50 backdrop-blur-sm rounded-lg">
           <div className="text-center p-4">
             <svg className="w-8 h-8 text-red-500 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span className="text-sm font-medium text-red-400">{error}</span>
+            <span className="text-sm font-medium text-red-400">{error}</span><button className="nodrag block mx-auto mt-2 text-cyan-300" onClick={() => setRevision((value) => value + 1)}>Retry prices</button>
           </div>
         </div>
       )}

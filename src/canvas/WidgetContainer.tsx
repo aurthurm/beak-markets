@@ -40,7 +40,8 @@ function WidgetContainerInner({ data, children, selected = false }: Props) {
   const clearResizeGuides = useCanvasStore((s) => s.clearResizeGuides);
   const setGlobalTicker = useTickerStore((s) => s.setGlobalTicker);
 
-  const [localTicker, setLocalTicker] = useState(data.ticker);
+  const [tickerDraft, setTickerDraft] = useState<{ ticker: string; value: string } | null>(null);
+  const localTicker = tickerDraft?.ticker === data.ticker ? tickerDraft.value : data.ticker;
 
   const handleTickerSubmit = useCallback(() => {
     const t = localTicker.toUpperCase().trim();
@@ -58,8 +59,8 @@ function WidgetContainerInner({ data, children, selected = false }: Props) {
     [handleTickerSubmit]
   );
 
-  const label = WIDGET_DEFAULTS[data.type]?.label ?? data.type;
-  const description = WIDGET_DEFAULTS[data.type]?.description ?? '';
+  const label = typeof data.settings.title === 'string' ? data.settings.title : WIDGET_DEFAULTS[data.type]?.label ?? data.type;
+  const description = typeof data.settings.description === 'string' ? data.settings.description : WIDGET_DEFAULTS[data.type]?.description ?? '';
   const isLocked = data.locked ?? false;
 
   const showResizeHandles = !isLocked && (isHovered || selected);
@@ -250,14 +251,15 @@ function WidgetContainerInner({ data, children, selected = false }: Props) {
               <input
                 type="text"
                 value={localTicker}
-                onChange={(e) => setLocalTicker(e.target.value.toUpperCase())}
+                aria-label="Widget ticker"
+                onChange={(e) => setTickerDraft({ ticker: data.ticker, value: e.target.value.toUpperCase() })}
                 onBlur={handleTickerSubmit}
                 onKeyDown={handleKeyDown}
                 className="w-16 px-1.5 py-0.5 text-xs bg-gray-700/60 border border-gray-600/40 rounded text-cyan-400 font-mono text-center focus:outline-none focus:border-cyan-500/50"
               />
 
               <button
-            onClick={() => updateWidgetData(data.id, { syncTicker: !data.syncTicker })}
+            onClick={() => updateWidgetData(data.id, { syncTicker: !data.syncTicker, ticker: data.ticker })}
             className={`p-1 rounded text-xs ${data.syncTicker ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-500 hover:text-gray-300'}`}
             title={data.syncTicker ? 'Synced' : 'Not synced'}
           >
@@ -318,7 +320,7 @@ function WidgetContainerInner({ data, children, selected = false }: Props) {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto p-3 nowheel min-h-0">
+      <div className="flex-1 overflow-auto p-3 nodrag nowheel min-h-0">
         {children}
       </div>
     </div>

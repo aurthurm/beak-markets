@@ -1,8 +1,10 @@
-import type { MarketDataset, PriceBar } from '../types';
+import type { MarketDataset } from '../types';
 
-const API_BASE_URL = 'http://127.0.0.1:8001/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api').replace(/\/$/, '');
 
 const cache = new Map<string, MarketDataset>();
+const fetchedAt = new Map<string, number>();
+const inFlight = new Map<string, Promise<MarketDataset>>();
 
 const HARDCODED_PAIRS = [
   { ticker: 'EUR/USD', name: 'Euro / US Dollar', pipSize: 0.0001 },
@@ -22,25 +24,35 @@ const HARDCODED_PAIRS = [
 ];
 
 export const marketService = {
-  async getDataset(ticker: string, forceRefetch = false): Promise<MarketDataset> {
-    if (!forceRefetch && cache.has(ticker)) {
-      return cache.get(ticker)!;
+  async getDataset(ticker: string, forceRefetch = false, days = 252): Promise<MarketDataset> {
+    const cacheKey = `${ticker}:${days}`;
+    if (!forceRefetch && cache.has(cacheKey) && Date.now() - (fetchedAt.get(cacheKey) ?? 0) < 300_000) {
+      return cache.get(cacheKey)!;
     }
 
-    const res = await fetch(`${API_BASE_URL}/market/dataset?ticker=${encodeURIComponent(ticker)}&days=252`);
+    const pending = inFlight.get(cacheKey);
+    if (pending) return pending;
+    const request = (async () => {
+    const res = await fetch(`${API_BASE_URL}/market/dataset?ticker=${encodeURIComponent(ticker)}&days=${days}`, { signal: AbortSignal.timeout(30_000) });
     if (!res.ok) {
       let errStr = `Failed to fetch data for ${ticker}`;
       try {
         const errData = await res.json();
         if (errData.detail) errStr = errData.detail;
-      } catch { }
+      } catch { /* Preserve the fallback error if the response is not JSON. */ }
       throw new Error(errStr);
     }
 
     const dataset: MarketDataset = await res.json();
+    if (dataset.ticker !== ticker || !Array.isArray(dataset.prices) || dataset.prices.length === 0 || dataset.prices.some((bar) => !Number.isFinite(bar.close) || bar.close <= 0)) throw new Error('Price response is empty or invalid');
     dataset.prices.sort((a, b) => a.timestamp - b.timestamp);
-    cache.set(ticker, dataset);
+    cache.set(cacheKey, dataset);
+    fetchedAt.set(cacheKey, Date.now());
     return dataset;
+    })();
+    inFlight.set(cacheKey, request);
+    try { return await request; } finally { inFlight.delete(cacheKey); }
+
   },
 
   getAvailableTickers() {
@@ -57,7 +69,9 @@ export const marketService = {
   async getLatestPrice(ticker: string, index?: number): Promise<number> {
     const ds = await this.getDataset(ticker);
     const idx = index ?? ds.prices.length - 1;
-    return ds.prices[idx]?.close ?? 0;
+    const price = ds.prices[Math.min(Math.max(0, idx), ds.prices.length - 1)]?.close;
+    if (!price || !Number.isFinite(price)) throw new Error("Price unavailable");
+    return price;
   },
 
   calculateSMA(prices: number[], period: number): (number | null)[] {

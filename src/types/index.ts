@@ -33,7 +33,7 @@ export type COTPosition = {
   long: number;
   short: number;
   net: number; // long - short
-  change: number; // change from prev week
+  change: number | null; // unavailable without a previous report
 };
 
 export type YieldPoint = {
@@ -103,11 +103,16 @@ export type WidgetType =
   | 'cot'
   | 'yields'
   | 'ainews'
+  | 'briefing'
+  | 'macroboard'
+  | 'liquidity'
+  | 'scenario'
   | 'sticker';
 
 export type Dashboard = {
   id: string;
   name: string;
+  ticker?: string;
 };
 
 export type WidgetConfig = {
@@ -150,8 +155,10 @@ export type PortfolioPosition = {
   ticker: string;
   quantity: number;
   avgPrice: number;
-  currentPrice: number;
-  pnl: number;
+  currentPrice: number | null;
+  pnl: number | null;
+  realizedPnl?: number;
+  priceAvailable?: boolean;
 };
 
 export const WIDGET_DEFAULTS: Record<
@@ -160,18 +167,22 @@ export const WIDGET_DEFAULTS: Record<
 > = {
   chart: { width: 620, height: 420, label: 'Candlestick Chart', description: 'OHLC candles, volume, indicators' },
   watchlist: { width: 300, height: 400, label: 'Watchlist', description: 'Track pairs and broadcast ticker' },
-  financials: { width: 400, height: 350, label: 'Financials', description: 'GDP, rates, CPI, unemployment' },
-  valuation: { width: 360, height: 300, label: 'Valuation', description: 'Rate differential, carry, inflation' },
-  interestRates: { width: 400, height: 340, label: 'Interest Rates', description: 'Central bank rates, carry, history' },
-  alerts: { width: 380, height: 350, label: 'Alerts', description: 'Price and indicator alerts' },
-  portfolio: { width: 500, height: 400, label: 'Portfolio Sandbox', description: 'Mock trades, P&L, equity curve' },
+  financials: { width: 400, height: 350, label: 'Financials', description: 'Annual World Bank macro observations' },
+  valuation: { width: 360, height: 300, label: 'Rate Comparison', description: 'Dated observed rate differentials' },
+  interestRates: { width: 400, height: 340, label: 'Interest Rates', description: 'Dated FRED observations; lagged proxies' },
+  alerts: { width: 380, height: 350, label: 'Alerts', description: 'Daily price threshold alerts' },
+  portfolio: { width: 500, height: 400, label: 'Portfolio Sandbox', description: 'Paper ledger; P&L in quote currency' },
   earnings: { width: 400, height: 320, label: 'Economic Calendar', description: 'Central bank dates, NFP, CPI' },
-  news: { width: 420, height: 450, label: 'News Feed', description: 'Headlines per pair with sentiment' },
-  sentiment: { width: 400, height: 420, label: 'Sentiment Analysis', description: 'Gauge, signals, history' },
+  news: { width: 420, height: 450, label: 'News Feed', description: 'Official Fed/ECB headlines and source dates' },
+  sentiment: { width: 400, height: 420, label: 'Price Momentum', description: 'Completed daily returns; no inferred news sentiment' },
   youtube: { width: 480, height: 360, label: 'YouTube Player', description: 'Embed videos' },
   cot: { width: 420, height: 420, label: 'Commitment of Traders', description: 'CFTC positioning: commercial, non-commercial, net' },
   yields: { width: 400, height: 360, label: 'Yields & Bonds', description: 'Treasury yields, yield curve, real yields' },
-  ainews: { width: 440, height: 480, label: 'AI News & Research', description: 'AI summarizer and market researcher' },
+  ainews: { width: 440, height: 480, label: 'Macro Research', description: 'Saved sourced analysis when a service is connected' },
+  briefing: { width: 640, height: 760, label: 'AI Macro Briefing', description: 'Daily and weekly sourced news, sentiment and conditional scenarios' },
+  macroboard: { width: 470, height: 560, label: 'Macro shortlist', description: 'Saved pair views, evidence, counterpoints and freshness' },
+  liquidity: { width: 430, height: 480, label: 'Daily liquidity sweeps', description: 'Real daily range breaches and rejections' },
+  scenario: { width: 450, height: 600, label: 'Scenario planner', description: 'Thesis, catalyst, entry, invalidation and review' },
   sticker: { width: 220, height: 200, label: 'NOTE', description: 'Write notes anywhere on the canvas' },
   beakchart: { width: 620, height: 420, label: 'BeakChart', description: 'Custom canvas chart with drawings' },
 };

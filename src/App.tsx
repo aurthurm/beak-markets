@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react';
+import AlertEvaluator from './components/AlertEvaluator';
 import CanvasEngine from './canvas/CanvasEngine';
 import Toolbar from './components/Toolbar';
 import WidgetSidebar from './components/WidgetSidebar';
@@ -33,6 +34,7 @@ export default function App() {
 
   return (
     <div className="w-screen h-screen bg-gray-950 overflow-hidden flex flex-col">
+      <AlertEvaluator />
       <Toolbar />
       <WidgetSidebar />
       <div className="flex-1 relative">

@@ -4,20 +4,19 @@ import { WidgetContainer } from './WidgetContainer';
 import { useTickerStore } from '../store/useTickerStore';
 import type { WidgetConfig } from '../types';
 
+import COTWidget from '../widgets/COTWidget';
 import ChartWidget from '../widgets/ChartWidget';
 import WatchlistWidget from '../widgets/WatchlistWidget';
-import FinancialsWidget from '../widgets/FinancialsWidget';
-import ValuationWidget from '../widgets/ValuationWidget';
-import InterestRatesWidget from '../widgets/InterestRatesWidget';
 import AlertsWidget from '../widgets/AlertsWidget';
 import PortfolioWidget from '../widgets/PortfolioWidget';
 import EarningsWidget from '../widgets/EarningsWidget';
-import NewsWidget from '../widgets/NewsWidget';
-import SentimentWidget from '../widgets/SentimentWidget';
+import NewsWidget from '../widgets/ResearchWidgets/News';
 import YoutubeWidget from '../widgets/YoutubeWidget';
-import COTWidget from '../widgets/COTWidget';
-import AINewsWidget from '../widgets/AINewsWidget';
-import YieldsBondsWidget from '../widgets/YieldsBondsWidget';
+import Fundamentals from '../widgets/ResearchWidgets/Fundamentals';
+import Briefing from '../widgets/ResearchWidgets/Briefing';
+import MacroBoard from '../widgets/ResearchWidgets/MacroBoard';
+import Liquidity from '../widgets/ResearchWidgets/Liquidity';
+import Scenario from '../widgets/ResearchWidgets/Scenario';
 import StickerWidget from '../widgets/StickerWidget';
 import BeakChartWidget from '../widgets/BeakChartWidget';
 
@@ -30,17 +29,17 @@ function WidgetNodeInner({ data, selected }: NodeProps) {
   const renderWidget = () => {
     switch (widgetData.type) {
       case 'chart':
-        return <ChartWidget ticker={effectiveTicker} />;
+        return <ChartWidget key={effectiveTicker} ticker={effectiveTicker} data={widgetData} />;
       case 'beakchart':
-        return <BeakChartWidget ticker={effectiveTicker} />;
+        return <BeakChartWidget key={effectiveTicker} ticker={effectiveTicker} />;
       case 'watchlist':
         return <WatchlistWidget ticker={effectiveTicker} widgetId={widgetData.id} />;
       case 'financials':
-        return <FinancialsWidget ticker={effectiveTicker} />;
+        return <Fundamentals key={`financials-${effectiveTicker}`} kind="financials" ticker={effectiveTicker} />;
       case 'valuation':
-        return <ValuationWidget ticker={effectiveTicker} />;
+        return <Fundamentals key={`valuation-${effectiveTicker}`} kind="valuation" ticker={effectiveTicker} />;
       case 'interestRates':
-        return <InterestRatesWidget ticker={effectiveTicker} />;
+        return <Fundamentals key={`interestRates-${effectiveTicker}`} kind="interestRates" ticker={effectiveTicker} />;
       case 'alerts':
         return <AlertsWidget ticker={effectiveTicker} />;
       case 'portfolio':
@@ -50,15 +49,19 @@ function WidgetNodeInner({ data, selected }: NodeProps) {
       case 'news':
         return <NewsWidget ticker={effectiveTicker} />;
       case 'sentiment':
-        return <SentimentWidget ticker={effectiveTicker} />;
+        return <Fundamentals key={`sentiment-${effectiveTicker}`} kind="sentiment" ticker={effectiveTicker} />;
       case 'youtube':
         return <YoutubeWidget data={widgetData} />;
       case 'cot':
-        return <COTWidget ticker={effectiveTicker} />;
+        return <COTWidget key={effectiveTicker} ticker={effectiveTicker} />;
       case 'ainews':
-        return <AINewsWidget ticker={effectiveTicker} />;
+        return <MacroBoard />;
       case 'yields':
-        return <YieldsBondsWidget ticker={effectiveTicker} />;
+        return <Fundamentals key={`yields-${effectiveTicker}`} kind="yields" ticker={effectiveTicker} />;
+      case 'briefing': return <Briefing data={widgetData} ticker={effectiveTicker} />;
+      case 'macroboard': return <MacroBoard />;
+      case 'liquidity': return <Liquidity ticker={effectiveTicker} />;
+      case 'scenario': return <Scenario data={widgetData} ticker={effectiveTicker} />;
       case 'sticker':
         return (
           <StickerWidget

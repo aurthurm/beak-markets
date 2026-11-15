@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { marketService } from '../../services/marketService';
+import { useSimulationStore } from '../../store/useSimulationStore';
 import { useAlertStore } from '../../store/useAlertStore';
-import { formatCurrency, formatDate } from '../../utils/format';
+import { formatDate } from '../../utils/format';
 import type { Alert } from '../../types';
 
 type Props = { ticker: string };
@@ -10,6 +12,23 @@ export default function AlertsWidget({ ticker }: Props) {
   const addAlert = useAlertStore((s) => s.addAlert);
   const removeAlert = useAlertStore((s) => s.removeAlert);
 
+  const checkAlerts = useAlertStore((s) => s.checkAlerts);
+  const currentIndex = useSimulationStore((s) => s.currentIndex);
+  const [feedError, setFeedError] = useState('');
+  const [checkedAt, setCheckedAt] = useState('');
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      try {
+        const price = await marketService.getLatestPrice(ticker, currentIndex);
+        if (active) { checkAlerts(ticker, price); setCheckedAt(new Date().toLocaleTimeString()); setFeedError(''); }
+      } catch { if (active) setFeedError('Price feed unavailable. Alerts have not been checked.'); }
+    };
+    void check();
+    const timer = window.setInterval(check, 60_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [ticker, currentIndex, alerts.length, checkAlerts]);
+
   const [alertType, setAlertType] = useState<Alert['type']>('price_above');
   const [alertValue, setAlertValue] = useState('');
 
@@ -17,13 +36,16 @@ export default function AlertsWidget({ ticker }: Props) {
 
   const handleAdd = () => {
     const val = parseFloat(alertValue);
-    if (isNaN(val)) return;
+    if (!Number.isFinite(val) || val <= 0) return;
     addAlert({ ticker, type: alertType, value: val });
     setAlertValue('');
   };
 
   return (
     <div className="flex flex-col h-full gap-3">
+      <p className="text-[10px] text-gray-500">Price alerts use daily closes (or the selected replay bar) while this page is open. They are not live tick alerts.</p>
+      {checkedAt && <p className="text-[10px] text-gray-500">Last checked {checkedAt}. Alerts are saved on this device.</p>}
+      {feedError && <p role="alert" className="text-amber-300 text-xs">{feedError}</p>}
       {/* Add alert form */}
       <div className="nodrag space-y-2 bg-gray-800/40 rounded-lg p-2.5 border border-gray-700/30">
         <div className="text-[10px] text-gray-500 uppercase tracking-wider">New Alert for {ticker}</div>
@@ -35,7 +57,7 @@ export default function AlertsWidget({ ticker }: Props) {
           >
             <option value="price_above">Price Above</option>
             <option value="price_below">Price Below</option>
-            <option value="indicator_cross">Indicator Cross</option>
+
           </select>
           <input
             type="number"
@@ -74,7 +96,7 @@ export default function AlertsWidget({ ticker }: Props) {
                 )}
                 <span className="text-xs font-mono text-white">
                   {alert.type === 'price_above' ? 'Above' : alert.type === 'price_below' ? 'Below' : 'Cross'}{' '}
-                  {formatCurrency(alert.value)}
+                  {alert.value.toFixed(marketService.getTickerDisplayInfo(ticker).decimals)} {alert.triggered ? '· Triggered' : '· Watching'}
                 </span>
               </div>
               <div className="text-[10px] text-gray-500">{formatDate(alert.createdAt)}</div>

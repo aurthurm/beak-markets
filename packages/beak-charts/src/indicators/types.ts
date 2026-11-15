@@ -1,4 +1,5 @@
 import type { LineDataPoint } from '../types.ts';
+export type { LineDataPoint } from '../types.ts';
 
 // ── Indicator Configuration ──────────────────────────────────────────────────
 

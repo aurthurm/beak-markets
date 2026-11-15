@@ -1,0 +1,514 @@
+{
+  "nodes": [
+    {
+      "id": "e8687516-7250-46db-acf4-9bf9207a1ca2",
+      "type": "widget",
+      "position": {
+        "x": 140,
+        "y": 80
+      },
+      "data": {
+        "id": "e8687516-7250-46db-acf4-9bf9207a1ca2",
+        "type": "chart",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251"
+      },
+      "style": {
+        "width": 620,
+        "height": 420
+      },
+      "width": 620,
+      "height": 420,
+      "measured": {
+        "width": 620,
+        "height": 420
+      }
+    },
+    {
+      "id": "d25d207b-3b29-4b4d-81c5-a4667c40fd7e",
+      "type": "widget",
+      "position": {
+        "x": 800,
+        "y": 80
+      },
+      "data": {
+        "id": "d25d207b-3b29-4b4d-81c5-a4667c40fd7e",
+        "type": "financials",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251"
+      },
+      "style": {
+        "width": 400,
+        "height": 350
+      },
+      "width": 400,
+      "height": 350,
+      "measured": {
+        "width": 400,
+        "height": 350
+      }
+    },
+    {
+      "id": "0fda8bcc-0578-47e2-bd4c-ac3fea1bf4d7",
+      "type": "widget",
+      "position": {
+        "x": 1240,
+        "y": 80
+      },
+      "data": {
+        "id": "0fda8bcc-0578-47e2-bd4c-ac3fea1bf4d7",
+        "type": "news",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251"
+      },
+      "style": {
+        "width": 420,
+        "height": 450
+      },
+      "width": 420,
+      "height": 450,
+      "measured": {
+        "width": 420,
+        "height": 450
+      }
+    },
+    {
+      "id": "bab7fac8-1908-47a5-ab08-598e115bb8bd",
+      "type": "widget",
+      "position": {
+        "x": 140,
+        "y": 570
+      },
+      "data": {
+        "id": "bab7fac8-1908-47a5-ab08-598e115bb8bd",
+        "type": "valuation",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251"
+      },
+      "style": {
+        "width": 360,
+        "height": 300
+      },
+      "width": 360,
+      "height": 300,
+      "measured": {
+        "width": 360,
+        "height": 300
+      }
+    },
+    {
+      "id": "4ccd56c2-c6bd-472a-b130-25b9971e9eaa",
+      "type": "widget",
+      "position": {
+        "x": 540,
+        "y": 570
+      },
+      "data": {
+        "id": "4ccd56c2-c6bd-472a-b130-25b9971e9eaa",
+        "type": "earnings",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251"
+      },
+      "style": {
+        "width": 400,
+        "height": 320
+      },
+      "width": 400,
+      "height": 320,
+      "measured": {
+        "width": 400,
+        "height": 320
+      }
+    },
+    {
+      "id": "275c7204-0e3b-4549-882e-48977034593c",
+      "type": "widget",
+      "position": {
+        "x": 980,
+        "y": 570
+      },
+      "data": {
+        "id": "275c7204-0e3b-4549-882e-48977034593c",
+        "type": "macroboard",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251"
+      },
+      "style": {
+        "width": 470,
+        "height": 560
+      },
+      "width": 470,
+      "height": 560,
+      "measured": {
+        "width": 470,
+        "height": 560
+      }
+    },
+    {
+      "id": "2f38d855-6fc0-4497-a2a8-54959974ed1a",
+      "type": "widget",
+      "position": {
+        "x": 140,
+        "y": 80
+      },
+      "data": {
+        "id": "2f38d855-6fc0-4497-a2a8-54959974ed1a",
+        "type": "beakchart",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "76f60782-4377-4d38-b8d5-c87baee09f1c"
+      },
+      "style": {
+        "width": 620,
+        "height": 420
+      },
+      "width": 620,
+      "height": 420,
+      "measured": {
+        "width": 620,
+        "height": 420
+      }
+    },
+    {
+      "id": "8b4d24c6-21ed-400e-9d8d-9486633757bb",
+      "type": "widget",
+      "position": {
+        "x": 800,
+        "y": 80
+      },
+      "data": {
+        "id": "8b4d24c6-21ed-400e-9d8d-9486633757bb",
+        "type": "interestRates",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "76f60782-4377-4d38-b8d5-c87baee09f1c"
+      },
+      "style": {
+        "width": 400,
+        "height": 340
+      },
+      "width": 400,
+      "height": 340,
+      "measured": {
+        "width": 400,
+        "height": 340
+      }
+    },
+    {
+      "id": "430d4d0c-fb0f-4ae4-99cc-f8e4cea147ee",
+      "type": "widget",
+      "position": {
+        "x": 1240,
+        "y": 80
+      },
+      "data": {
+        "id": "430d4d0c-fb0f-4ae4-99cc-f8e4cea147ee",
+        "type": "cot",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "76f60782-4377-4d38-b8d5-c87baee09f1c"
+      },
+      "style": {
+        "width": 420,
+        "height": 420
+      },
+      "width": 420,
+      "height": 420,
+      "measured": {
+        "width": 420,
+        "height": 420
+      }
+    },
+    {
+      "id": "ac958e90-3e47-4852-9a7d-e05b91969962",
+      "type": "widget",
+      "position": {
+        "x": 140,
+        "y": 540
+      },
+      "data": {
+        "id": "ac958e90-3e47-4852-9a7d-e05b91969962",
+        "type": "yields",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "76f60782-4377-4d38-b8d5-c87baee09f1c"
+      },
+      "style": {
+        "width": 400,
+        "height": 360
+      },
+      "width": 400,
+      "height": 360,
+      "measured": {
+        "width": 400,
+        "height": 360
+      }
+    },
+    {
+      "id": "e9b8ee60-a03c-43b9-895a-66ae1c2f9729",
+      "type": "widget",
+      "position": {
+        "x": 580,
+        "y": 540
+      },
+      "data": {
+        "id": "e9b8ee60-a03c-43b9-895a-66ae1c2f9729",
+        "type": "sentiment",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "76f60782-4377-4d38-b8d5-c87baee09f1c"
+      },
+      "style": {
+        "width": 400,
+        "height": 420
+      },
+      "width": 400,
+      "height": 420,
+      "measured": {
+        "width": 400,
+        "height": 420
+      }
+    },
+    {
+      "id": "2c4f9839-50ec-4cd6-97cc-8e7b294cb65a",
+      "type": "widget",
+      "position": {
+        "x": 1020,
+        "y": 540
+      },
+      "data": {
+        "id": "2c4f9839-50ec-4cd6-97cc-8e7b294cb65a",
+        "type": "sticker",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {
+          "content": "Compare observation dates before comparing economies. JPY futures and USD/JPY use opposite quotation directions."
+        },
+        "dashboardId": "76f60782-4377-4d38-b8d5-c87baee09f1c"
+      },
+      "style": {
+        "width": 220,
+        "height": 200
+      },
+      "width": 300,
+      "height": 280,
+      "measured": {
+        "width": 300,
+        "height": 280
+      },
+      "dragging": false,
+      "resizing": false
+    },
+    {
+      "id": "1952fec6-75f9-4fde-bb5a-5ee8c8d2d9f2",
+      "type": "widget",
+      "position": {
+        "x": 140,
+        "y": 80
+      },
+      "data": {
+        "id": "1952fec6-75f9-4fde-bb5a-5ee8c8d2d9f2",
+        "type": "watchlist",
+        "ticker": "USD/JPY",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "07bcc5d3-2062-42d2-b7f9-7275951629c8"
+      },
+      "style": {
+        "width": 300,
+        "height": 400
+      },
+      "width": 300,
+      "height": 400,
+      "measured": {
+        "width": 300,
+        "height": 400
+      }
+    },
+    {
+      "id": "70d4bfd8-ea8a-4df6-add0-48a19b662b98",
+      "type": "widget",
+      "position": {
+        "x": 480,
+        "y": 80
+      },
+      "data": {
+        "id": "70d4bfd8-ea8a-4df6-add0-48a19b662b98",
+        "type": "liquidity",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "07bcc5d3-2062-42d2-b7f9-7275951629c8"
+      },
+      "style": {
+        "width": 430,
+        "height": 480
+      },
+      "width": 430,
+      "height": 480,
+      "measured": {
+        "width": 430,
+        "height": 480
+      }
+    },
+    {
+      "id": "51abb407-366f-4f2f-8ce3-118e05d8aade",
+      "type": "widget",
+      "position": {
+        "x": 950,
+        "y": 80
+      },
+      "data": {
+        "id": "51abb407-366f-4f2f-8ce3-118e05d8aade",
+        "type": "scenario",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "07bcc5d3-2062-42d2-b7f9-7275951629c8"
+      },
+      "style": {
+        "width": 450,
+        "height": 600
+      },
+      "width": 450,
+      "height": 600,
+      "measured": {
+        "width": 450,
+        "height": 600
+      }
+    },
+    {
+      "id": "7907387f-4a3f-4759-865b-990e236bc4fa",
+      "type": "widget",
+      "position": {
+        "x": 140,
+        "y": 720
+      },
+      "data": {
+        "id": "7907387f-4a3f-4759-865b-990e236bc4fa",
+        "type": "alerts",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "07bcc5d3-2062-42d2-b7f9-7275951629c8"
+      },
+      "style": {
+        "width": 380,
+        "height": 350
+      },
+      "width": 380,
+      "height": 350,
+      "measured": {
+        "width": 380,
+        "height": 350
+      }
+    },
+    {
+      "id": "bca59464-b8b4-4538-a31a-96fefa6fabe9",
+      "type": "widget",
+      "position": {
+        "x": 560,
+        "y": 720
+      },
+      "data": {
+        "id": "bca59464-b8b4-4538-a31a-96fefa6fabe9",
+        "type": "portfolio",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "07bcc5d3-2062-42d2-b7f9-7275951629c8"
+      },
+      "style": {
+        "width": 500,
+        "height": 400
+      },
+      "width": 500,
+      "height": 400,
+      "measured": {
+        "width": 500,
+        "height": 400
+      }
+    },
+    {
+      "id": "9596e3da-cde4-49ac-9871-1b24c2b18e75",
+      "type": "widget",
+      "position": {
+        "x": 1100,
+        "y": 720
+      },
+      "data": {
+        "id": "9596e3da-cde4-49ac-9871-1b24c2b18e75",
+        "type": "youtube",
+        "ticker": "EUR/USD",
+        "syncTicker": true,
+        "locked": false,
+        "settings": {},
+        "dashboardId": "07bcc5d3-2062-42d2-b7f9-7275951629c8"
+      },
+      "style": {
+        "width": 480,
+        "height": 360
+      },
+      "width": 480,
+      "height": 360,
+      "measured": {
+        "width": 480,
+        "height": 360
+      }
+    }
+  ],
+  "edges": [],
+  "dashboards": [
+    {
+      "id": "191c982a-a761-434f-bcc1-0d343a2d0251",
+      "name": "EUR/USD macro research",
+      "ticker": "EUR/USD"
+    },
+    {
+      "id": "76f60782-4377-4d38-b8d5-c87baee09f1c",
+      "name": "USD/JPY rates and positioning",
+      "ticker": "USD/JPY"
+    },
+    {
+      "id": "07bcc5d3-2062-42d2-b7f9-7275951629c8",
+      "name": "Daily execution and scenarios",
+      "ticker": "EUR/USD"
+    }
+  ],
+  "activeDashboardId": "191c982a-a761-434f-bcc1-0d343a2d0251",
+  "globalTicker": "EUR/USD"
+}

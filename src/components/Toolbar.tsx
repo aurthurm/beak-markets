@@ -5,6 +5,7 @@ import { useTickerStore } from '../store/useTickerStore';
 import { simulationService } from '../services/simulationService';
 import { captureWidget, downloadImage } from '../utils/capture';
 import type { WidgetConfig } from '../types';
+import { parseWorkspace } from '../services/workspace';
 
 export default function Toolbar() {
   const toggleGrid = useCanvasStore((s) => s.toggleGrid);
@@ -21,6 +22,7 @@ export default function Toolbar() {
   const renameDashboard = useCanvasStore((s) => s.renameDashboard);
   const removeDashboard = useCanvasStore((s) => s.removeDashboard);
 
+  const [workspaceError, setWorkspaceError] = useState('');
   const [captureOpen, setCaptureOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [editingDashboardId, setEditingDashboardId] = useState<string | null>(null);
@@ -108,6 +110,7 @@ export default function Toolbar() {
   };
 
   const handleExport = () => {
+    saveLayout();
     const data = localStorage.getItem('canvas-trader-layout');
     if (data) {
       const blob = new Blob([data], { type: 'application/json' });
@@ -121,6 +124,7 @@ export default function Toolbar() {
   };
 
   const handleImport = () => {
+    setWorkspaceError('');
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.json';
@@ -130,10 +134,10 @@ export default function Toolbar() {
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const data = JSON.parse(reader.result as string);
+          const data = parseWorkspace(reader.result as string);
           localStorage.setItem('canvas-trader-layout', JSON.stringify(data));
           window.location.reload();
-        } catch { /* ignore */ }
+        } catch { setWorkspaceError('Import failed: choose a valid CanvasTrader workspace JSON file. The current workspace was preserved.'); }
       };
       reader.readAsText(file);
     };
@@ -300,11 +304,12 @@ export default function Toolbar() {
           ))}
         </div>
 
-        <span className="text-[10px] text-gray-500 font-mono">
+        <span title="Replay uses a bar index for each instrument; dates can differ when price histories have gaps." className="text-[10px] text-gray-500 font-mono">
           Day {currentIndex + 1}/252
         </span>
       </div>
 
+      {workspaceError && <p role="alert" className="absolute top-12 right-4 z-[80] max-w-sm rounded border border-amber-500/30 bg-gray-900 p-3 text-xs text-amber-300">{workspaceError}</p>}
       {/* Right: Canvas Controls */}
       <div className="flex items-center gap-2">
         <button

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { v4 as uuid } from 'uuid';
 import type { Alert } from '../types';
 
@@ -10,7 +11,7 @@ type AlertStore = {
   checkAlerts: (ticker: string, price: number) => void;
 };
 
-export const useAlertStore = create<AlertStore>((set, get) => ({
+export const useAlertStore = create<AlertStore>()(persist((set, get) => ({
   alerts: [],
 
   addAlert: (alert) => {
@@ -33,6 +34,7 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
   },
 
   checkAlerts: (ticker, price) => {
+    if (!Number.isFinite(price) || price <= 0) return;
     const { alerts, triggerAlert } = get();
     alerts
       .filter((a) => !a.triggered && a.ticker === ticker)
@@ -41,4 +43,4 @@ export const useAlertStore = create<AlertStore>((set, get) => ({
         if (a.type === 'price_below' && price <= a.value) triggerAlert(a.id);
       });
   },
-}));
+}), { name: 'canvas-trader-price-alerts', partialize: (state) => ({ alerts: state.alerts }) }));

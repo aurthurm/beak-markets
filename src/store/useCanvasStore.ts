@@ -8,6 +8,9 @@ import {
   type EdgeChange,
 } from '@xyflow/react';
 import { v4 as uuid } from 'uuid';
+import { EURUSD_DESK_NAME, eurusdDeskWidgets } from '../services/eurusdDesk';
+import { parseWorkspace } from '../services/workspace';
+import { useTickerStore } from './useTickerStore';
 import type { WidgetConfig, WidgetType, Dashboard } from '../types';
 import { WIDGET_DEFAULTS } from '../types';
 
@@ -35,6 +38,9 @@ type CanvasStore = {
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   addWidget: (type: WidgetType, position?: { x: number; y: number }, dashboardId?: string) => void;
+  addResearchDesk: () => void;
+  addEurusdDesk: () => void;
+  addResearchPresets: () => void;
   removeWidget: (id: string) => void;
   removeSelectedWidgets: () => void;
   duplicateWidget: (id: string) => void;
@@ -56,10 +62,10 @@ type CanvasStore = {
   setEdges: (edges: Edge[]) => void;
 };
 
-function loadFromStorage(): { nodes: Node[]; edges: Edge[]; dashboards?: Dashboard[]; activeDashboardId?: string } | null {
+function loadFromStorage(): { nodes: Node[]; edges: Edge[]; dashboards?: Dashboard[]; activeDashboardId?: string | null; globalTicker?: string } | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return parseWorkspace(raw);
   } catch { /* ignore */ }
   return null;
 }
@@ -97,7 +103,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       data: {
         id,
         type,
-        ticker: 'EUR/USD',
+        ticker: useTickerStore.getState().globalTicker,
         syncTicker: true,
         locked: false,
         settings: {},
@@ -108,6 +114,58 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       height: defaults.height,
     };
     set({ nodes: [...existingNodes, newNode] });
+  },
+
+  addEurusdDesk: () => {
+    const existing = get().dashboards.find((dashboard) => dashboard.name === EURUSD_DESK_NAME);
+    if (existing) { get().setActiveDashboard(existing.id); return; }
+    const dashboardId = uuid();
+    const nodes: Node[] = eurusdDeskWidgets.map((widget) => {
+      const id = uuid();
+      return { id, type: 'widget', position: { x: widget.x, y: widget.y },
+        width: widget.width, height: widget.height, style: { width: widget.width, height: widget.height },
+        data: { id, type: widget.type, ticker: widget.ticker, syncTicker: false, locked: false,
+          settings: structuredClone(widget.settings), dashboardId } satisfies WidgetConfig };
+    });
+    useTickerStore.getState().setGlobalTicker('EUR/USD');
+    set({ nodes: [...get().nodes, ...nodes], dashboards: [...get().dashboards,
+      { id: dashboardId, name: EURUSD_DESK_NAME, ticker: 'EUR/USD' }], activeDashboardId: dashboardId });
+    get().saveLayout();
+  },
+
+  addResearchDesk: () => {
+    const dashboardId = uuid();
+    set({ dashboards: [...get().dashboards, { id: dashboardId, name: 'Macro research desk' }], activeDashboardId: dashboardId });
+    const widgets: { type: WidgetType; x: number; y: number }[] = [
+      { type: 'briefing', x: 140, y: 80 },
+      { type: 'news', x: 820, y: 80 },
+      { type: 'earnings', x: 1280, y: 80 },
+      { type: 'liquidity', x: 140, y: 880 },
+      { type: 'scenario', x: 640, y: 880 },
+    ];
+    widgets.forEach(({ type, x, y }) => get().addWidget(type, { x, y }, dashboardId));
+  },
+
+  addResearchPresets: () => {
+    const presets: { name: string; ticker: string; types: WidgetType[] }[] = [
+      { name: 'EUR/USD macro research', ticker: 'EUR/USD', types: ['chart', 'financials', 'news', 'valuation', 'earnings', 'macroboard'] },
+      { name: 'USD/JPY rates and positioning', ticker: 'USD/JPY', types: ['beakchart', 'interestRates', 'cot', 'yields', 'sentiment', 'sticker'] },
+      { name: 'Daily execution and scenarios', ticker: 'EUR/USD', types: ['watchlist', 'liquidity', 'scenario', 'alerts', 'portfolio', 'youtube'] },
+    ];
+    let firstId: string | null = null;
+    for (const preset of presets) {
+      if (get().dashboards.some((dashboard) => dashboard.name === preset.name)) continue;
+      const dashboardId = uuid();
+      firstId ??= dashboardId;
+      set({ dashboards: [...get().dashboards, { id: dashboardId, name: preset.name, ticker: preset.ticker }] });
+      preset.types.forEach((type, index) => {
+        get().addWidget(type, { x: 140 + (index % 3) * 660, y: 80 + Math.floor(index / 3) * 660 }, dashboardId);
+        const node = get().nodes.at(-1)!;
+        get().updateWidgetData(node.id, { ticker: preset.ticker });
+      });
+    }
+    if (firstId) get().setActiveDashboard(firstId);
+    get().saveLayout();
   },
 
   removeWidget: (id) => {
@@ -135,7 +193,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       ...node,
       id: newId,
       position: { x: node.position.x + 40, y: node.position.y + 40 },
-      data: { ...node.data, id: newId },
+      data: { ...node.data, id: newId, settings: structuredClone(node.data.settings) },
     };
     set({ nodes: [...get().nodes, newNode] });
   },
@@ -181,7 +239,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
   },
 
-  setActiveDashboard: (id) => set({ activeDashboardId: id }),
+  setActiveDashboard: (id) => {
+    const dashboard = get().dashboards.find((item) => item.id === id);
+    if (dashboard?.ticker) useTickerStore.getState().setGlobalTicker(dashboard.ticker);
+    set({ activeDashboardId: id });
+  },
   setCanvasMode: (mode) => set({ canvasMode: mode }),
   setWidgetDashboard: (widgetId, dashboardId) => {
     set({
@@ -199,12 +261,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   saveLayout: () => {
     const { nodes, edges, dashboards, activeDashboardId } = get();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges, dashboards, activeDashboardId }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, edges, dashboards, activeDashboardId, globalTicker: useTickerStore.getState().globalTicker }));
   },
 
   loadLayout: () => {
     const saved = loadFromStorage();
     if (saved) {
+      if (saved.globalTicker) useTickerStore.getState().setGlobalTicker(saved.globalTicker);
       const dashboards = saved.dashboards ?? [];
       const nodes = (saved.nodes ?? []).map((n: Node) => {
         const cfg = n.data as WidgetConfig;

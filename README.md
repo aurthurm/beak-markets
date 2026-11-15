@@ -2,6 +2,10 @@
 
 An infinite-canvas market analytics workstation built with React 19. Drag, resize, and arrange specialised widgets — charts, news, sentiment, COT reports, portfolio sandbox, AI research, and more — across a free-form canvas, then save the layout and come back exactly where you left off.
 
+![EUR/USD multi-timeframe trading research dashboard](docs/images/eurusd-dashboard.jpg)
+
+*Example EUR/USD workspace with monthly, weekly and daily charts, dollar context, and macro research widgets.*
+
 ---
 
 ## Table of Contents
@@ -43,10 +47,10 @@ Key characteristics:
 
 - **Infinite canvas** powered by ReactFlow — pan, zoom, drag, multi-select
 - **Custom charting engine** (`@beak/charts`) written from scratch on the HTML Canvas API — no external chart vendor
-- **16 specialised widgets** covering price action, macro data, sentiment, positioning, and AI-assisted research
+- **Specialised widgets** covering price action, macro data, sentiment, positioning, and AI-assisted research
 - **Pattern recognition engine** with six candlestick/price-structure patterns rendered directly on the canvas
 - **Simulation mode** — replay historical data bar-by-bar at variable speed, with all widgets updating in sync
-- **Mock trading sandbox** — execute paper trades, track positions, and visualise the equity curve
+- **Paper trading sandbox** — record fills, partial closes and reversals with P&L separated by quote currency
 
 ---
 
@@ -72,26 +76,37 @@ Key characteristics:
 
 ## Getting Started
 
-```bash
-# Install dependencies (uses pnpm workspaces)
-pnpm install
+Requirements: Node.js 22+, Python 3.14+ and [uv](https://docs.astral.sh/uv/).
 
-# Start the development server (http://localhost:5173)
-pnpm dev
+Start the backend in terminal 1:
 
-# Type-check and build for production
-pnpm build
-
-# Preview the production build locally
-pnpm preview
-
-# Lint
-pnpm lint
+```sh
+cd backend
+uv sync --locked
+uv run uvicorn canvas_backend.main:app --app-dir src --host 127.0.0.1 --port 8001
 ```
 
-**Requirements:** Node.js 18+ and [pnpm](https://pnpm.io) 9+.
+Start the frontend from the repository root in terminal 2:
 
-The monorepo uses pnpm workspaces. The local `@beak/charts` package is resolved via Vite path aliases (`@beak/charts` and `@beak/charts/react`) — no separate install or build step is needed.
+```sh
+npm ci
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Open http://127.0.0.1:5173/. API docs: http://127.0.0.1:8001/docs.
+
+Click **EUR/USD desk** for four charts (EUR/USD monthly/weekly/daily and DXY daily), macro briefing, economic calendar, liquidity scanner and a conditional example plan. Existing dashboards are preserved. **3 presets** adds further research layouts.
+
+`VITE_API_BASE_URL` defaults to `http://127.0.0.1:8001/api`. Optional paid AI generation requires `OPENAI_API_KEY` in the **backend environment**, followed by a restart and an explicit generation action in the widget. Do not expose keys in Vite variables or canvas exports. See [backend setup](backend/README.md), [briefing guide](docs/BRIEFING_GUIDE.md) and [EUR/USD desk guide](docs/EURUSD_DESK.md).
+
+```sh
+npm test
+npm run build
+# Backend fixture tests, from backend/:
+PYTHONPATH=src uv run python -m unittest discover -s tests -p 'test_*.py'
+```
+
+The local `@beak/charts` package resolves through Vite aliases; no separate publishing step is needed. Local databases, credentials and installed dependencies are excluded from git.
 
 ---
 
@@ -306,7 +321,7 @@ The simulation bar in the Toolbar lets you replay market data as if time is adva
 - **Play / Pause** — starts or stops automatic bar-by-bar advancement
 - **Speed** — multiplier controlling how fast bars advance
 - **Scrub** — drag the progress indicator to jump to any bar in the dataset
-- **All widgets update in sync** — charts, news, sentiment, COT, portfolio P&L, and alerts all reflect the current simulation index
+- **Price-based views** follow the replay bar index; instrument dates can differ where histories have gaps. News, calendar, macro and positioning widgets retain their source observation dates and do not replay historical news.
 
 This makes Canvas Trader useful as a manual backtesting / chart reading practice environment.
 
@@ -319,30 +334,18 @@ The Portfolio widget provides a zero-risk paper trading environment:
 - Enter a buy or sell at the current simulated price (or any manually entered price)
 - Open positions are tracked with quantity, entry price, current price, and unrealised P&L
 - Closed trades accumulate realised P&L
-- An equity curve chart visualises cumulative performance over time
+- Partial closes and reversals are accounted for; quote currencies remain separate and missing prices show unavailable P&L. No synthetic equity curve is displayed.
 - Positions update automatically as the simulation advances
 
 ---
 
 ## AI News & Research
 
-The AI News widget connects to an LLM of your choice to summarise and research market events:
+**AI Macro Briefing** archives public headlines, short excerpts and calendar events, grouped by day or Monday–Sunday week in the browser timezone. Today/This week/Last week shortcuts, historical dates, global/pair scope and source-type filters help navigate evidence.
 
-**Supported providers:**
+Refreshing sources is free and makes no AI call. Optional server-side OpenAI generation requires explicit paid consent for one period. Saved summaries are persisted with their cited evidence snapshot; unchanged summaries are reused. Drivers, analyst perspectives, counterarguments and conditional scenarios remain interpretations of sampled evidence. Missing coverage is not neutral sentiment. Future calendar entries are labelled scheduled risks.
 
-| Provider | Models |
-|---|---|
-| OpenAI | GPT-4o, GPT-4o mini, GPT-4 Turbo |
-| Anthropic | Claude Opus 4, Claude Sonnet 4.5, Claude Haiku 4.5 |
-| Google | Gemini 1.5 Pro, Gemini 1.5 Flash |
-| Mock | Offline demo mode (no API key required) |
-
-**News source modes:**
-
-- **Web search** — general search across the web for the active ticker
-- **Specific sites** — target curated sources (Reuters, Bloomberg, FX Street, DailyFX, Investing.com, etc.)
-
-API keys are stored locally in `localStorage` via `useAISettingsStore`.
+The optional macro shortlist reads saved analyses from `ANALYSIS_API_URL`; it does not request new paid generation. Legacy direct-provider AI modules remain in the source tree but are not the active briefing integration. See the [briefing guide](docs/BRIEFING_GUIDE.md).
 
 ---
 
@@ -503,20 +506,13 @@ const { ref, getChart } = useBeakChart();
 
 ## Data Layer
 
-All market data is generated deterministically from seeded pseudo-random functions in `src/mock-data/generators.ts`. The seed is derived from the ticker string, so each ticker always produces the same dataset on any machine.
+The active frontend uses the bundled FastAPI service. Prices come from Yahoo daily OHLC with a local SQLite cache. Weekly/monthly chart candles are aggregates of observed daily sessions, cut off before aggregation during replay; edge periods may be incomplete. There is no intraday feed or comprehensive spot-FX volume. Gold uses the explicitly labelled GC=F futures proxy.
 
-Generated data per ticker:
+Research adapters provide annual World Bank observations, FRED rates/yields, CFTC weekly futures positioning, public news feeds and ForexFactory calendar entries. Availability varies; missing data stays unavailable. Annual observations are not interpolated into daily data, and futures positioning is not market-wide spot-FX order flow. Rates/yields can be lagged; calendar actuals may be missing.
 
-- **OHLCV bars** — daily frequency, ~2 years of history
-- **Financial data** — GDP, CPI, unemployment, central bank rate
-- **News items** — 15 headlines with source, sentiment score, and impact level
-- **Sentiment data** — gauge reading, signal breakdown, 30-day history
-- **COT report** — commercial, non-commercial, and net positioning
-- **Yields data** — full yield curve (3 m → 30 yr) and real yields
+The frontend cache deduplicates requests, expires them and separates history lengths. Missing or malformed provider data does not silently become synthetic observations. Legacy generator modules remain in the tree but are not used by the active market dataset endpoint.
 
-Supported instruments: 14 forex pairs (EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, NZD/USD, USD/CHF, EUR/GBP, EUR/JPY, GBP/JPY, AUD/JPY, EUR/CHF), XAU/USD, and DXY.
-
-`marketService` wraps the generator with a `Map`-based cache so each ticker is generated once per session.
+Supported instruments include EUR/USD, GBP/USD, USD/JPY, USD/CHF, AUD/USD, USD/CAD, NZD/USD, EUR/GBP, EUR/JPY, GBP/JPY, AUD/JPY, EUR/CHF, XAU/USD and DXY.
 
 ---
 
