@@ -2,6 +2,10 @@
 
 An infinite-canvas market analytics workstation built with React 19. Drag, resize, and arrange specialised widgets — charts, news, sentiment, COT reports, portfolio sandbox, AI research, and more — across a free-form canvas, then save the layout and come back exactly where you left off.
 
+![EUR/USD multi-timeframe trading research dashboard](docs/images/eurusd-dashboard.jpg)
+
+*Example EUR/USD workspace with monthly, weekly and daily charts, dollar context, and macro research widgets.*
+
 ---
 
 ## Table of Contents
